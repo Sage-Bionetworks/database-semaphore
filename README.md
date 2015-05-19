@@ -54,6 +54,7 @@ the following system properties must be provide:
 * jdbc.url
 * jdbc.username
 * jdbc.password
+
 ## mvn
 ````
 mvn clean install -Djdbc.url=jdbc:mysql://localhost/semaphore -Djdbc.username=<username> -Djdbc.password=<password>
@@ -66,9 +67,7 @@ Add the following the "VM Arguments" for the runner:
 "-Djdbc.password=<password>"
 ````
 # Dependencies
-This project depends on spring-jdbc 4.1.6.RELEASE or newer.  All Spring dependencies are marked with a <scope>provided</scope>.
-The CountingkSemaphoreImpl does not use an Inversion Of Control (IoC) system it should work with any IoC system as a simple Java object.  Spring IoC is used only for testing.  
-
-
+This project depends on spring-jdbc 4.1.6.RELEASE or newer.  All Spring dependencies are marked with a scope=provided so it should work with your version of Spring.
+The CountingkSemaphoreImpl is a simple Java object so it should be usable with any Inversion Of Control (IoC) system.  This project uses Spring IoC for testing only.  
 
  
