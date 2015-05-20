@@ -15,6 +15,7 @@ import java.util.UUID;
 import javax.sql.DataSource;
 
 import org.apache.commons.io.IOUtils;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -191,9 +192,7 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 						 * Now lock the master row. This ensure all operations
 						 * on this key occur serially.
 						 */
-						jdbcTemplate.queryForObject(
-								SQL_SELECT_MASTER_KEY_FOR_UPDATE, String.class,
-								key);
+						lockOnMasterKey(key);
 						// delete expired locks
 						jdbcTemplate.update(SQL_DELETE_EXPIRED_LOCKS, key);
 						// Count the remaining locks
@@ -209,7 +208,24 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 						// No token for you!
 						return null;
 					}
+
+
 				});
+	}
+	
+	/**
+	 * Lock on the master key row.
+	 * @param key
+	 * @throws LockKeyNotFoundException if the key does not exist.
+	 */
+	private void lockOnMasterKey(final String key) {
+		try {
+			jdbcTemplate.queryForObject(
+					SQL_SELECT_MASTER_KEY_FOR_UPDATE, String.class,
+					key);
+		} catch (EmptyResultDataAccessException e) {
+			throw new LockKeyNotFoundException("Key not found: "+key);
+		}
 	}
 
 	/*
@@ -230,10 +246,11 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 		requiresNewTransactionTempalte.execute(new TransactionCallback<Void>() {
 
 			public Void doInTransaction(TransactionStatus status) {
-				// Now lock the master row. This ensure all operations on this
-				// key occur serially.
-				jdbcTemplate.queryForObject(SQL_SELECT_MASTER_KEY_FOR_UPDATE,
-						String.class, key);
+				/*
+				 * Now lock the master row. This ensure all operations
+				 * on this key occur serially.
+				 */
+				lockOnMasterKey(key);
 				// delete expired locks
 				int changes = jdbcTemplate.update(SQL_DELETE_LOCK_WITH_TOKEN,
 						token);
@@ -280,10 +297,11 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 		requiresNewTransactionTempalte.execute(new TransactionCallback<Void>() {
 
 			public Void doInTransaction(TransactionStatus status) {
-				// Now lock the master row. This ensure all operations on this
-				// key occur serially.
-				jdbcTemplate.queryForObject(SQL_SELECT_MASTER_KEY_FOR_UPDATE,
-						String.class, key);
+				/*
+				 * Now lock the master row. This ensure all operations
+				 * on this key occur serially.
+				 */
+				lockOnMasterKey(key);
 				// Add more time to the lock.
 				int changes = jdbcTemplate.update(SQL_UPDATE_LOCK_EXPIRES,
 						timeoutSec, key, token);

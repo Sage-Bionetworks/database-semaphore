@@ -3,6 +3,15 @@ package org.sagebionetworks.database.semaphore;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -22,6 +31,8 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(locations = { "classpath:test-context.spb.xml" })
 public class CountingSemaphoreImplTest {
+	
+	private static final Logger log = LogManager.getLogger(CountingSemaphoreImplTest.class);
 	
 	@Autowired
 	CountingSemaphore semaphore;
@@ -130,6 +141,71 @@ public class CountingSemaphoreImplTest {
 		semaphore.releaseAllLocks();
 		// Now try to release the lock
 		semaphore.releaseLock(key, token1);
+	}
+	
+	/**
+	 * Test concurrent threads can acquire and release locks
+	 * @throws Exception 
+	 */
+	@Test
+	public void testConcurrent() throws Exception{
+		int maxThreads = 25;
+		long lockTimeoutSec = 2;
+		int maxLockCount = maxThreads-1;
+		ExecutorService executorService =Executors.newFixedThreadPool(maxThreads);
+		List<Callable<Boolean>> runners = new LinkedList<Callable<Boolean>>();
+		;
+		for(int i=0; i<maxThreads; i++){
+			TestRunner runner = new TestRunner(semaphore, key, lockTimeoutSec, maxLockCount);
+			runners.add(runner);
+		}
+		// run all runners
+		List<Future<Boolean>> futures = executorService.invokeAll(runners);
+		int locksAcquired = 0;
+		for(Future<Boolean> future: futures){
+			if(future.get()){
+				locksAcquired++;
+			}
+		}
+		assertEquals("The number of locks acquired did not match the expected count.",maxLockCount, locksAcquired);
+	}
+	
+
+	private class TestRunner implements Callable<Boolean> {
+		CountingSemaphore semaphore;
+		String key;
+		long lockTimeoutSec;
+		int maxLockCount;
+		long sleepTimeMs;
+		
+		
+		public TestRunner(CountingSemaphore semaphore, String key,
+				long lockTimeoutSec, int maxLockCount) {
+			super();
+			this.semaphore = semaphore;
+			this.key = key;
+			this.lockTimeoutSec = lockTimeoutSec;
+			this.maxLockCount = maxLockCount;
+			this.sleepTimeMs = lockTimeoutSec/2*1000;
+		}
+
+		public Boolean call() throws Exception {
+			String token = semaphore.attemptToAcquireLock(key, lockTimeoutSec, maxLockCount);
+			if(token != null){
+				try {
+					Thread.sleep(sleepTimeMs);
+					// the lock was acquired and held
+					return true;
+				} catch (InterruptedException e) {
+					throw new RuntimeException(e);
+				} finally {
+					semaphore.releaseLock(key, token);
+				}
+			}else{
+				// lock was not acquired
+				return false;
+			}
+		}
 	}
 
 }
