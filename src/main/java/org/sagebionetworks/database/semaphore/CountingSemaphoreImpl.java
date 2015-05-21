@@ -15,7 +15,6 @@ import java.util.UUID;
 import javax.sql.DataSource;
 
 import org.apache.commons.io.IOUtils;
-import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -37,7 +36,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * @author John
  * 
  */
-public class CountingkSemaphoreImpl implements CountingSemaphore {
+public class CountingSemaphoreImpl implements CountingSemaphore {
 
 	private static final String SQL_TRUNCATE_LOCKS = "TRUNCATE TABLE "
 			+ TABLE_SEMAPHORE_LOCK;
@@ -96,7 +95,7 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 	 *            Must be a connection to a MySql Database, ideally a database
 	 *            connection pool.
 	 */
-	public CountingkSemaphoreImpl(DataSource dataSourcePool) {
+	public CountingSemaphoreImpl(DataSource dataSourcePool) {
 		// This class should never participate with any other transactions so it
 		// gets its own transaction manager.
 		DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(
@@ -128,7 +127,7 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 	 * @return
 	 */
 	public static String loadStringFromClassPath(String fileName) {
-		InputStream in = CountingkSemaphoreImpl.class.getClassLoader()
+		InputStream in = CountingSemaphoreImpl.class.getClassLoader()
 				.getResourceAsStream(fileName);
 		if (in == null) {
 			throw new IllegalArgumentException("Cannot find: " + fileName
