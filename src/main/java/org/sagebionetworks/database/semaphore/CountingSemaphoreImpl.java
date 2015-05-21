@@ -168,7 +168,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 					maxLockCount);
 		} catch (LockKeyNotFoundException e) {
 			// Create the key
-			createLocTransactionk(key);
+			createLockKeyInTransaction(key);
 			// try to lock again
 			return attemptToAcquireLockTransaction(key, timeoutSec,
 					maxLockCount);
@@ -321,7 +321,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 * 
 	 * @param key
 	 */
-	private void createLocTransactionk(final String key) {
+	private void createLockKeyInTransaction(final String key) {
 		if (key == null) {
 			throw new IllegalArgumentException("Key cannot be null");
 		}
