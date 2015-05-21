@@ -1,5 +1,5 @@
 # database-semaphore
-## Introduction
+### Introduction
 When working with a cluster of web-servers or worker machines it is common to need to limit the number of concurrent processes that are allowed to perform a given task across the cluster.
 
 For example, assume a cluster of web-servers are generating logs that record web-services requests and pushing these logs to an object store such an S3.  To make use of such logs it would be nice if the logs were collated by time stamp into hourly files.  A basic worker setup to process these logs might be a singleton that coordinates the collation work by queuing lists of files to be collated.  Then a fleet of _n_ workers could be used to concurrently dequeue each list and to perform the actual collation. 
@@ -44,11 +44,9 @@ Once lock timeout is introduced the next big question is always how much time is
 It is important point out the semaphore.attemptToAcquireLock() will fail quickly if a lock is unavailable as opposed to blocking the caller until a lock is available.  This allows the caller to quickly free up any resources such a threads or memory when a lock is unavailable.
 
 ### Deadlock
-A classic deadlock scenario requires at least two thread, at least two locks and blocking or waiting for unavailable locks.  
-For example, thread A holds lock 'foo' and thread B holds lock 'bar'.  
-Then if thread A attempts to get lock 'bar' and thread B attempts to get lock 'foo' deadlock would be possible if the attempt to get the lock were to be blocking or if the caller waits for the second lock to become available while holding the first.  
-Since the semaphore.attemptToAcquireLock() call is non-blocking, deadlock is only possible if each thread were to wait for the second lock while holding the first.
-We recommend that caller never waits for locks. However, if you must wait for a lock then it becomes your responsibility to prevent deadlocks using standard techniques.  For example, all processes should acquire locks in the same order.  Or, limit one lock per processes.
+A classic deadlock scenario requires at least two thread, at least two locks and blocking or waiting for unavailable locks. For example, thread A holds lock 'foo' and thread B holds lock 'bar'.  Then if thread A attempts to get lock 'bar' and thread B attempts to get lock 'foo' deadlock would be possible if the attempt to get the lock were to be blocking or if the caller waits for the second lock to become available while holding the first.  Since the semaphore.attemptToAcquireLock() call is non-blocking, deadlock is only possible if each thread were to wait for the second lock while holding the first.
+
+We recommend that caller never waits for a lock. However, if you must wait for a lock then it becomes your responsibility to prevent deadlocks using standard techniques.  For example, all processes should acquire locks in the same order.  Or, limit one lock per processes.
 
 ### Database Exclusive Locks
 To prevent race conditions when more than one instances attempts to acquire the same lock at the same time, an exclusive row level lock is used to ensure all lock request for a given key are process serially (as opposed to concurrently).  This row level lock is only held for a very short window of time (only long enough to check if a lock is available and to issue a lock).
