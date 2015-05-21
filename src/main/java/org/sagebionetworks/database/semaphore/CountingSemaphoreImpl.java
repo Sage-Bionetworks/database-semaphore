@@ -166,7 +166,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 		try {
 			return attemptToAcquireLockTransaction(key, timeoutSec,
 					maxLockCount);
-		} catch (EmptyResultDataAccessException e) {
+		} catch (LockKeyNotFoundException e) {
 			// Create the key
 			createLocTransactionk(key);
 			// try to lock again
