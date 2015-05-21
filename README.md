@@ -51,7 +51,7 @@ We recommend that caller never waits for a lock. However, if you must wait for a
 ### Database Exclusive Locks
 To prevent race conditions when more than one instances attempts to acquire the same lock at the same time, an exclusive row level lock is used to ensure all lock request for a given key are process serially (as opposed to concurrently).  This row level lock is only held for a very short window of time (only long enough to check if a lock is available and to issue a lock).
 
-Over the years we have tried many different implementation of a counting semaphore using MySQL.  Each version had its own subtle flaws that lead to instability, deadlock or poor performance. 
+Over the years we have tried many different implementation of a counting semaphore using MySQL.  Each version had its own subtle flaws that lead to instability, deadlock or poor performance.  The implementation of CountingSemaphore included in this project represents the culmination of our effort to create robust and performant database backed counting semaphore. 
 
 ## Build
 This project includes integration tests that must run against a MySQL database.  In order to run these tests
