@@ -25,7 +25,7 @@
 	</bean>
 
 	<bean id="semaphore"
-		class="org.sagebionetworks.database.semaphore.CountingkSemaphoreImpl">
+		class="org.sagebionetworks.database.semaphore.CountingSemaphoreImpl">
 		<constructor-arg ref="dataSourcePool"></constructor-arg>
 	</bean>
 </beans>

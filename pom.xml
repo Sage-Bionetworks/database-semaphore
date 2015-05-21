@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.sagebionetworks</groupId>
 	<artifactId>database-semaphore</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0</version>
 	<packaging>jar</packaging>
 	<name>database-semaphore</name>
 	<description>Simple MySQL backed Semaphore</description>
@@ -139,4 +139,20 @@
 	<properties>
 		<spring.version>4.1.6.RELEASE</spring.version>
 	</properties>
+
+	<distributionManagement>
+		<repository>
+			<id>sagebionetworks</id>
+			<name>sagebionetworks-releases</name>
+			<url>http://sagebionetworks.artifactoryonline.com/sagebionetworks/libs-releases-local
+			</url>
+		</repository>
+		<snapshotRepository>
+			<id>sagebionetworks</id>
+			<name>sagebionetworks-snapshots</name>
+			<url>http://sagebionetworks.artifactoryonline.com/sagebionetworks/libs-snapshots-local
+			</url>
+			<uniqueVersion>false</uniqueVersion>
+		</snapshotRepository>
+	</distributionManagement>
 </project>
