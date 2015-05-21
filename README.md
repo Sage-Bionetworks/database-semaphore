@@ -60,7 +60,7 @@ the following system properties must be provide:
 * jdbc.username
 * jdbc.password
 
-Note: The jdbc.url can be any valid JDBC MySQL database connection URL that includes the name of an existing schema (i.e. jdbc:mysql://localhost/<schema_name>). The schema must already exist and the provided user must have permission to create tables, insert, update, and delete rows in that schema.
+Note: The jdbc.url can be any valid JDBC MySQL database connection URL that includes the name of an existing schema (i.e. jdbc:mysql://localhost/schema_name). The schema must already exist and the provided user must have permission to create tables, insert, update, and delete rows in that schema.
 
 ### mvn
 ````

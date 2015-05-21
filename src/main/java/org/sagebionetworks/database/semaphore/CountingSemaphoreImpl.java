@@ -96,6 +96,9 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 *            connection pool.
 	 */
 	public CountingSemaphoreImpl(DataSource dataSourcePool) {
+		if(dataSourcePool == null){
+			throw new IllegalArgumentException("DataSource cannot be null");
+		}
 		// This class should never participate with any other transactions so it
 		// gets its own transaction manager.
 		DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(
