@@ -38,14 +38,15 @@ import org.springframework.transaction.support.TransactionTemplate;
  * @author John
  * 
  */
-public class CountingkSemaphoreImpl implements CountingSemaphore {
+
+public class CountingSemaphoreImpl implements CountingSemaphore {
 	
 
-	private static final Logger log = LogManager.getLogger(CountingkSemaphoreImpl.class);
+	private static final Logger log = LogManager.getLogger(CountingSemaphoreImpl.class);
 	/*
 	 * Errors will be logged if lock acquisition takes longer than this time in MS.
 	 */
-	public static final long MAX_LOCK_TIME_MS = 1;
+	public static final long MAX_LOCK_TIME_MS = 1000;
 	private static final String EXCEEDED_THE_MAXIMUM_TIME_TO_ACQUIRE_A_LOCK_IN_MS = "\t %s Exceeded the maximum time to acquire a lock: %d MS";
 	
 	/*
@@ -124,7 +125,10 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 	 *            Must be a connection to a MySql Database, ideally a database
 	 *            connection pool.
 	 */
-	public CountingkSemaphoreImpl(DataSource dataSourcePool) {
+	public CountingSemaphoreImpl(DataSource dataSourcePool) {
+		if(dataSourcePool == null){
+			throw new IllegalArgumentException("DataSource cannot be null");
+		}
 		// This class should never participate with any other transactions so it
 		// gets its own transaction manager.
 		DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(
@@ -156,7 +160,7 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 	 * @return
 	 */
 	public static String loadStringFromClassPath(String fileName) {
-		InputStream in = CountingkSemaphoreImpl.class.getClassLoader()
+		InputStream in = CountingSemaphoreImpl.class.getClassLoader()
 				.getResourceAsStream(fileName);
 		if (in == null) {
 			throw new IllegalArgumentException("Cannot find: " + fileName
@@ -192,9 +196,9 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 		try {
 			return attemptToAcquireLockTransaction(key, timeoutSec,
 					maxLockCount);
-		} catch (EmptyResultDataAccessException e) {
+		} catch (LockKeyNotFoundException e) {
 			// Create the key
-			createLocTransactionk(key);
+			createLockKeyInTransaction(key);
 			// try to lock again
 			return attemptToAcquireLockTransaction(key, timeoutSec,
 					maxLockCount);
@@ -389,7 +393,7 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 	 * 
 	 * @param key
 	 */
-	private void createLocTransactionk(final String key) {
+	private void createLockKeyInTransaction(final String key) {
 		if (key == null) {
 			throw new IllegalArgumentException("Key cannot be null");
 		}
