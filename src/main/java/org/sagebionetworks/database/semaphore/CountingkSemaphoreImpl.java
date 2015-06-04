@@ -15,7 +15,8 @@ import java.util.UUID;
 import javax.sql.DataSource;
 
 import org.apache.commons.io.IOUtils;
-import org.springframework.dao.DataAccessException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -38,6 +39,33 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 
  */
 public class CountingkSemaphoreImpl implements CountingSemaphore {
+	
+
+	private static final Logger log = LogManager.getLogger(CountingkSemaphoreImpl.class);
+	/*
+	 * Errors will be logged if lock acquisition takes longer than this time in MS.
+	 */
+	public static final long MAX_LOCK_TIME_MS = 1;
+	private static final String EXCEEDED_THE_MAXIMUM_TIME_TO_ACQUIRE_A_LOCK_IN_MS = "\t %s Exceeded the maximum time to acquire a lock: %d MS";
+	
+	/*
+	 * Debug logging templates.
+	 */
+	private static final String NO_LOCK_ISSUED_IN_MS	 = "\t %s No Lock issued in %d MS";
+	private static final String LOCK_ISSUED_IN_MS		 = "\t %s Lock issued: %s in %d MS";
+	/*
+	 * Trace logging templates.
+	 */
+	private static final String CREATED_MASTER			 = "\t %s Created master";
+	private static final String REFRESHED_TOKEN			 = "\t %s Refreshed token: %s";
+	private static final String FAILED_REFRESH_TOKEN	 = "\t %s Failed refresh token: %s";
+	private static final String LOCK_RELEASED_TOKEN		 = "\t %s Lock released token: %s";
+	private static final String FAILED_TO_RELEASE_TOKEN	 = "\t %s Failed to release token: %s";
+	private static final String LOCKING_ON_MASTER		 = "\t %s Locking on master";
+	private static final String NO_LOCKS_AVAILABLE		 = "\t %s No locks available";
+	private static final String ISSUED_NEW_LOCK_TOKEN	 = "\t %s Issued new lock token: %s";
+	private static final String LOCKS_ISSUED			 = "\t %s Locks issued: %s";
+	private static final String DELETED_EXPIRED_LOCKS	 = "\t %s Deleted %s expired locks";
 
 	private static final String SQL_TRUNCATE_LOCKS = "TRUNCATE TABLE "
 			+ TABLE_SEMAPHORE_LOCK;
@@ -188,28 +216,55 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 				.execute(new TransactionCallback<String>() {
 
 					public String doInTransaction(TransactionStatus status) {
+						
+						long startMS = System.currentTimeMillis();
 						/*
 						 * Now lock the master row. This ensure all operations
 						 * on this key occur serially.
 						 */
 						lockOnMasterKey(key);
 						// delete expired locks
-						jdbcTemplate.update(SQL_DELETE_EXPIRED_LOCKS, key);
+						long count = jdbcTemplate.update(SQL_DELETE_EXPIRED_LOCKS, key);
+						if(log.isTraceEnabled()){
+							log.trace(String.format(DELETED_EXPIRED_LOCKS, key, count));
+						}
 						// Count the remaining locks
-						long count = jdbcTemplate.queryForObject(
+						count = jdbcTemplate.queryForObject(
 								SQL_COUNT_OUTSTANDING_LOCKS, Long.class, key);
+						if(log.isTraceEnabled()){
+							log.trace(String.format(LOCKS_ISSUED, key, count));
+						}
 						if (count < maxLockCount) {
 							// issue a lock
 							String token = UUID.randomUUID().toString();
 							jdbcTemplate.update(SQL_INSERT_NEW_LOCK, key,
 									token, timeoutSec);
+							
+							if(log.isTraceEnabled()){
+								log.trace(String.format(ISSUED_NEW_LOCK_TOKEN, key, token));
+							}
+							long elapseMS = System.currentTimeMillis()- startMS;
+							if(log.isDebugEnabled()){
+								log.debug(String.format(LOCK_ISSUED_IN_MS, key, token, elapseMS));
+							}
+							if(elapseMS > MAX_LOCK_TIME_MS){
+								log.error(String.format(EXCEEDED_THE_MAXIMUM_TIME_TO_ACQUIRE_A_LOCK_IN_MS, key, elapseMS));
+							}
 							return token;
+						}
+						if(log.isTraceEnabled()){
+							log.trace(String.format(NO_LOCKS_AVAILABLE, key));
+						}
+						long elapseMS = System.currentTimeMillis()- startMS;
+						if(log.isDebugEnabled()){
+							log.debug(String.format(NO_LOCK_ISSUED_IN_MS, key, elapseMS));
+						}
+						if(elapseMS > MAX_LOCK_TIME_MS){
+							log.error(String.format(EXCEEDED_THE_MAXIMUM_TIME_TO_ACQUIRE_A_LOCK_IN_MS, key, elapseMS));
 						}
 						// No token for you!
 						return null;
 					}
-
-
 				});
 	}
 	
@@ -223,6 +278,9 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 			jdbcTemplate.queryForObject(
 					SQL_SELECT_MASTER_KEY_FOR_UPDATE, String.class,
 					key);
+			if(log.isTraceEnabled()){
+				log.trace(String.format(LOCKING_ON_MASTER, key));
+			}
 		} catch (EmptyResultDataAccessException e) {
 			throw new LockKeyNotFoundException("Key not found: "+key);
 		}
@@ -255,8 +313,14 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 				int changes = jdbcTemplate.update(SQL_DELETE_LOCK_WITH_TOKEN,
 						token);
 				if (changes < 1) {
+					if(log.isTraceEnabled()){
+						log.trace(String.format(FAILED_TO_RELEASE_TOKEN, key, token));
+					}
 					throw new LockReleaseFailedException("Key: " + key
 							+ " token: " + token + " has expired.");
+				}
+				if(log.isTraceEnabled()){
+					log.trace(String.format(LOCK_RELEASED_TOKEN, key, token));
 				}
 				return null;
 			}
@@ -306,8 +370,14 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 				int changes = jdbcTemplate.update(SQL_UPDATE_LOCK_EXPIRES,
 						timeoutSec, key, token);
 				if (changes < 1) {
+					if(log.isTraceEnabled()){
+						log.trace(String.format(FAILED_REFRESH_TOKEN, key, token));
+					}
 					throw new LockReleaseFailedException("Key: " + key
 							+ " token: " + token + " has expired.");
+				}
+				if(log.isTraceEnabled()){
+					log.trace(String.format(REFRESHED_TOKEN, key, token));
 				}
 				return null;
 			}
@@ -328,6 +398,9 @@ public class CountingkSemaphoreImpl implements CountingSemaphore {
 			public Void doInTransaction(TransactionStatus status) {
 				// step one, ensure we have a master lock
 				jdbcTemplate.update(SQL_INSERT_IGNORE_MASTER, key);
+				if(log.isTraceEnabled()){
+					log.trace(String.format(CREATED_MASTER, key));
+				}
 				return null;
 			}
 		});
