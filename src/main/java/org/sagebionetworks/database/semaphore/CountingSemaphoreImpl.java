@@ -44,16 +44,16 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 
 	private static final Logger log = LogManager.getLogger(CountingSemaphoreImpl.class);
 	/*
-	 * Errors will be logged if lock acquisition takes longer than this time in MS.
+	 * Errors will be logged if the master lock is held longer than this time in MS.
 	 */
 	public static final long MAX_LOCK_TIME_MS = 1000;
-	private static final String EXCEEDED_THE_MAXIMUM_TIME_TO_ACQUIRE_A_LOCK_IN_MS = "\t %s Exceeded the maximum time to acquire a lock: %d MS";
+	private static final String EXCEEDED_THE_MAXIMUM_TIME_TO_ACQUIRE_A_LOCK_IN_MS = "\t %s Exceeded the maximum time the master lock could be held: %d MS";
 	
 	/*
 	 * Debug logging templates.
 	 */
 	private static final String NO_LOCK_ISSUED_IN_MS	 = "\t %s No Lock issued in %d MS";
-	private static final String LOCK_ISSUED_IN_MS		 = "\t %s Lock issued: %s in %d MS";
+	private static final String MASTER_LOCK_HELD_FOR	 = "\t %s Master Lock held for: %d MS";
 	/*
 	 * Trace logging templates.
 	 */
@@ -220,13 +220,12 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 				.execute(new TransactionCallback<String>() {
 
 					public String doInTransaction(TransactionStatus status) {
-						
-						long startMS = System.currentTimeMillis();
 						/*
 						 * Now lock the master row. This ensure all operations
 						 * on this key occur serially.
 						 */
-						lockOnMasterKey(key);
+						long masterLockAcquiredTimeMS = lockOnMasterKey(key);
+						
 						// delete expired locks
 						long count = jdbcTemplate.update(SQL_DELETE_EXPIRED_LOCKS, key);
 						if(log.isTraceEnabled()){
@@ -247,25 +246,13 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 							if(log.isTraceEnabled()){
 								log.trace(String.format(ISSUED_NEW_LOCK_TOKEN, key, token));
 							}
-							long elapseMS = System.currentTimeMillis()- startMS;
-							if(log.isDebugEnabled()){
-								log.debug(String.format(LOCK_ISSUED_IN_MS, key, token, elapseMS));
-							}
-							if(elapseMS > MAX_LOCK_TIME_MS){
-								log.error(String.format(EXCEEDED_THE_MAXIMUM_TIME_TO_ACQUIRE_A_LOCK_IN_MS, key, elapseMS));
-							}
+							validateLockHeldTime(masterLockAcquiredTimeMS, key);
 							return token;
 						}
 						if(log.isTraceEnabled()){
 							log.trace(String.format(NO_LOCKS_AVAILABLE, key));
 						}
-						long elapseMS = System.currentTimeMillis()- startMS;
-						if(log.isDebugEnabled()){
-							log.debug(String.format(NO_LOCK_ISSUED_IN_MS, key, elapseMS));
-						}
-						if(elapseMS > MAX_LOCK_TIME_MS){
-							log.error(String.format(EXCEEDED_THE_MAXIMUM_TIME_TO_ACQUIRE_A_LOCK_IN_MS, key, elapseMS));
-						}
+						validateLockHeldTime(masterLockAcquiredTimeMS, key);
 						// No token for you!
 						return null;
 					}
@@ -273,11 +260,29 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	}
 	
 	/**
+	 * Validate that the master lock was held for only short duration.  If the expected time is exceeded
+	 * an error will be logged.
+	 * @param masterLockAcquiredTimeMS
+	 * @param key
+	 */
+	private void validateLockHeldTime(long masterLockAcquiredTimeMS, String key){
+		// How long was the master lock held?
+		long elapseMS = System.currentTimeMillis()- masterLockAcquiredTimeMS;
+		if(log.isDebugEnabled()){
+			log.debug(String.format(MASTER_LOCK_HELD_FOR, key, elapseMS));
+		}
+		if(elapseMS > MAX_LOCK_TIME_MS){
+			log.error(String.format(EXCEEDED_THE_MAXIMUM_TIME_TO_ACQUIRE_A_LOCK_IN_MS, key, elapseMS));
+		}
+	}
+	
+	/**
 	 * Lock on the master key row.
 	 * @param key
+	 * @return The time in MS that the master lock was acquired.
 	 * @throws LockKeyNotFoundException if the key does not exist.
 	 */
-	private void lockOnMasterKey(final String key) {
+	private long lockOnMasterKey(final String key) {
 		try {
 			jdbcTemplate.queryForObject(
 					SQL_SELECT_MASTER_KEY_FOR_UPDATE, String.class,
@@ -285,6 +290,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			if(log.isTraceEnabled()){
 				log.trace(String.format(LOCKING_ON_MASTER, key));
 			}
+			return System.currentTimeMillis();
 		} catch (EmptyResultDataAccessException e) {
 			throw new LockKeyNotFoundException("Key not found: "+key);
 		}
@@ -312,7 +318,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 				 * Now lock the master row. This ensure all operations
 				 * on this key occur serially.
 				 */
-				lockOnMasterKey(key);
+				long masterLockAcquiredTimeMS = lockOnMasterKey(key);
 				// delete expired locks
 				int changes = jdbcTemplate.update(SQL_DELETE_LOCK_WITH_TOKEN,
 						token);
@@ -320,12 +326,14 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 					if(log.isTraceEnabled()){
 						log.trace(String.format(FAILED_TO_RELEASE_TOKEN, key, token));
 					}
+					validateLockHeldTime(masterLockAcquiredTimeMS, key);
 					throw new LockReleaseFailedException("Key: " + key
 							+ " token: " + token + " has expired.");
 				}
 				if(log.isTraceEnabled()){
 					log.trace(String.format(LOCK_RELEASED_TOKEN, key, token));
 				}
+				validateLockHeldTime(masterLockAcquiredTimeMS, key);
 				return null;
 			}
 		});
@@ -369,7 +377,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 				 * Now lock the master row. This ensure all operations
 				 * on this key occur serially.
 				 */
-				lockOnMasterKey(key);
+				long masterLockAcquiredTimeMS = lockOnMasterKey(key);
 				// Add more time to the lock.
 				int changes = jdbcTemplate.update(SQL_UPDATE_LOCK_EXPIRES,
 						timeoutSec, key, token);
@@ -377,12 +385,14 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 					if(log.isTraceEnabled()){
 						log.trace(String.format(FAILED_REFRESH_TOKEN, key, token));
 					}
+					validateLockHeldTime(masterLockAcquiredTimeMS, key);
 					throw new LockReleaseFailedException("Key: " + key
 							+ " token: " + token + " has expired.");
 				}
 				if(log.isTraceEnabled()){
 					log.trace(String.format(REFRESHED_TOKEN, key, token));
 				}
+				validateLockHeldTime(masterLockAcquiredTimeMS, key);
 				return null;
 			}
 		});
