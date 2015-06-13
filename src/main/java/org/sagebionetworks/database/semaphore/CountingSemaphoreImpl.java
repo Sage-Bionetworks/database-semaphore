@@ -202,7 +202,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 					"MaxLockCount cannot be less then one.");
 		}
 		/*
-		 * All of the logic for this called in built into the attemptToAcquireLock procedure.
+		 * All of the logic for this called in built into the attemptToAcquireLock procedure (see PLFM-3439)
 		 */
 		return jdbcTemplate.queryForObject("CALL attemptToAcquireLock(?, ?, ?)", String.class, key, timeoutSec, maxLockCount);
 	}
