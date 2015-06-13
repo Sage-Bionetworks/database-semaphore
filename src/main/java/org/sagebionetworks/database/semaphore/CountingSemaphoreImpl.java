@@ -17,6 +17,7 @@ import javax.sql.DataSource;
 import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -109,6 +110,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 
 	private static final String SEMAPHORE_LOCK_DDL_SQL = "schema/SemaphoreLock.ddl.sql";
 	private static final String SEMAPHORE_MASTER_DDL_SQL = "schema/SemaphoreMaster.ddl.sql";
+	private static final String ATTEMPT_TO_ACQUIRE_LOCK_PROCEDURE_DDL_SQL = "schema/attemptToAcquireLock.ddl.sql";
 
 	private JdbcTemplate jdbcTemplate;
 
@@ -151,6 +153,12 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 				.update(loadStringFromClassPath(SEMAPHORE_MASTER_DDL_SQL));
 		this.jdbcTemplate
 				.update(loadStringFromClassPath(SEMAPHORE_LOCK_DDL_SQL));
+		try {
+			this.jdbcTemplate
+			.update(loadStringFromClassPath(ATTEMPT_TO_ACQUIRE_LOCK_PROCEDURE_DDL_SQL));
+		} catch (DataAccessException e) {
+			log.info("Procedure 'attemptToAcquireLock' already exists");
+		}
 	}
 
 	/**
@@ -193,16 +201,10 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			throw new IllegalArgumentException(
 					"MaxLockCount cannot be less then one.");
 		}
-		try {
-			return attemptToAcquireLockTransaction(key, timeoutSec,
-					maxLockCount);
-		} catch (LockKeyNotFoundException e) {
-			// Create the key
-			createLockKeyInTransaction(key);
-			// try to lock again
-			return attemptToAcquireLockTransaction(key, timeoutSec,
-					maxLockCount);
-		}
+		/*
+		 * All of the logic for this called in built into the attemptToAcquireLock procedure.
+		 */
+		return jdbcTemplate.queryForObject("CALL attemptToAcquireLock(?, ?, ?)", String.class, key, timeoutSec, maxLockCount);
 	}
 
 	/**
