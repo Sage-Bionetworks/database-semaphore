@@ -1,8 +1,10 @@
-CREATE PROCEDURE attemptToAcquireLock(IN lockKey VARCHAR(256), IN timeoutSec INT(4), IN maxLockCount INT(4))
+CREATE PROCEDURE attemptToAcquireSemaphoreLock(IN lockKey VARCHAR(256), IN timeoutSec INT(4), IN maxLockCount INT(4))
 BEGIN
 	DECLARE lockKeyExists VARCHAR(256);
 	DECLARE countOutstanding INT(4);
 	DECLARE newToken VARCHAR(256);
+	/*Use READ COMMITTED to prevent the use of gap locks.*/
+	SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	START TRANSACTION;
 	/* Acquire an exclusive lock on the master row.*/
 	SELECT LOCK_KEY INTO lockKeyExists FROM SEMAPHORE_MASTER WHERE LOCK_KEY = lockKey FOR UPDATE;
@@ -31,7 +33,7 @@ BEGIN
 	ELSE
 		SET newToken = NULL;
 	END IF;
-COMMIT;
-/* push the token to the result set*/
-SELECT newToken AS TOKEN;
+	COMMIT;
+	/* push the token to the result set*/
+	SELECT newToken AS TOKEN;
 END;
