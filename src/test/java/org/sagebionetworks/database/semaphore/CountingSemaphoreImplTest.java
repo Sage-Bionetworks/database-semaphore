@@ -50,8 +50,10 @@ public class CountingSemaphoreImplTest {
 		int maxLockCount = 2;
 		long timeoutSec = 60;
 		// get one lock
+		long start = System.currentTimeMillis();
 		String token1 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
 		assertNotNull(token1);
+		log.info("AcquiredLock in "+(System.currentTimeMillis()-start)+" MS");
 		// get another
 		String token2 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
 		assertNotNull(token2);
@@ -190,7 +192,9 @@ public class CountingSemaphoreImplTest {
 		}
 
 		public Boolean call() throws Exception {
+			long start = System.currentTimeMillis();
 			String token = semaphore.attemptToAcquireLock(key, lockTimeoutSec, maxLockCount);
+			log.info("AcquiredLock in "+(System.currentTimeMillis()-start)+" MS with token: "+token);
 			if(token != null){
 				try {
 					Thread.sleep(sleepTimeMs);
