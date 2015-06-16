@@ -12,6 +12,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * <p>
@@ -60,6 +61,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	private static final String PROCEDURE_DDL_SQL_TEMPLATE = "schema/%s.ddl.sql";
 	private static final String PROCEDURE_EXITS_TEMPLATE = "PROCEDURE %s already exists";
 
+	TransactionTemplate requiresNewTransactionTempalte;
 	private JdbcTemplate jdbcTemplate;
 
 	DataSource dataSourcePool;
@@ -148,10 +150,6 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			throw new IllegalArgumentException(
 					"MaxLockCount cannot be less then one.");
 		}
-		/*
-		 * All of the logic for this called in built into the
-		 * attemptToAcquireLock procedure (see PLFM-3439)
-		 */
 		return jdbcTemplate.queryForObject(
 				CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK, String.class,
 				key, timeoutSec, maxLockCount);

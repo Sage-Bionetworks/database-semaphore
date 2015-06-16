@@ -10,7 +10,6 @@ BEGIN
 		/* Master lock does not exist */
 		SELECT -1 AS RESULT;
 	ELSE
-		SET SQL_SAFE_UPDATES = 0;
 		DELETE FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey AND TOKEN = tokenIn;
 		/*Count the rows affected by the delete*/
 		SELECT ROW_COUNT() AS RESULT;

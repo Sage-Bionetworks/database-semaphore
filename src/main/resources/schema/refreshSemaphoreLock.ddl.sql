@@ -10,7 +10,6 @@ BEGIN
 		/* Master lock does not exist */
 		SELECT -1 AS RESULT;
 	ELSE
-		SET SQL_SAFE_UPDATES = 0;
 		UPDATE SEMAPHORE_LOCK SET EXPIRES_ON = (CURRENT_TIMESTAMP + INTERVAL timeoutSec SECOND) WHERE LOCK_KEY = lockKey AND TOKEN = tokenIn;
 		/*Count the rows affected by the delete*/
 		SELECT ROW_COUNT() AS RESULT;

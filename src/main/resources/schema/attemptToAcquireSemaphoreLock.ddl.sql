@@ -19,7 +19,6 @@ BEGIN
 		SELECT LOCK_KEY INTO lockKeyExists FROM SEMAPHORE_MASTER WHERE LOCK_KEY = lockKey FOR UPDATE;
     END IF;
 	/* Delete expired locks*/
-	SET SQL_SAFE_UPDATES = 0;
 	DELETE FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey AND EXPIRES_ON < current_timestamp;
 	/* Count outstanding locks*/ 
 	SELECT COUNT(*) INTO countOutstanding FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey;
