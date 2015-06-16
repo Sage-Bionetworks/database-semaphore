@@ -3,8 +3,6 @@ BEGIN
 	DECLARE lockKeyExists VARCHAR(256);
 	DECLARE countOutstanding INT(4);
 	DECLARE newToken VARCHAR(256);
-	/*Use READ COMMITTED to prevent the use of gap locks.*/
-	SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	START TRANSACTION;
 	/* Acquire an exclusive lock on the master row.*/
 	SELECT LOCK_KEY INTO lockKeyExists FROM SEMAPHORE_MASTER WHERE LOCK_KEY = lockKey FOR UPDATE;
@@ -23,7 +21,6 @@ BEGIN
 	/* Delete expired locks*/
 	SET SQL_SAFE_UPDATES = 0;
 	DELETE FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey AND EXPIRES_ON < current_timestamp;
-	SET SQL_SAFE_UPDATES = 1;
 	/* Count outstanding locks*/ 
 	SELECT COUNT(*) INTO countOutstanding FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey;
 	
