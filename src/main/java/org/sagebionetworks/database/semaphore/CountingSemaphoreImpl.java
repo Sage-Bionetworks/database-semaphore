@@ -4,6 +4,7 @@ import static org.sagebionetworks.database.semaphore.Sql.TABLE_SEMAPHORE_LOCK;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.sql.Connection;
 
 import javax.sql.DataSource;
 
@@ -12,6 +13,12 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -74,11 +81,27 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 * @param dataSourcePool
 	 *            Must be a connection to a MySql Database, ideally a database
 	 *            connection pool.
+	 * @param transactionManager
+	 *            The singleton transaction manager.
+	 * 
 	 */
-	public CountingSemaphoreImpl(DataSource dataSourcePool) {
+	public CountingSemaphoreImpl(DataSource dataSourcePool,
+			PlatformTransactionManager transactionManager) {
 		if (dataSourcePool == null) {
 			throw new IllegalArgumentException("DataSource cannot be null");
 		}
+		if (transactionManager == null) {
+			throw new IllegalArgumentException("TransactionManager cannot be null");
+		}
+		DefaultTransactionDefinition transactionDef = new DefaultTransactionDefinition();
+		transactionDef.setIsolationLevel(Connection.TRANSACTION_READ_COMMITTED);
+		transactionDef.setReadOnly(false);
+		transactionDef
+				.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		transactionDef.setName("CountingSemaphoreImpl");
+		// This will manage transactions for calls that need it.
+		requiresNewTransactionTempalte = new TransactionTemplate(
+				transactionManager, transactionDef);
 		jdbcTemplate = new JdbcTemplate(dataSourcePool);
 
 		// Create the tables
@@ -137,6 +160,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 * org.sagebionetworks.warehouse.workers.semaphore.MultipleLockSemaphore
 	 * #attemptToAquireLock(java.lang.String, long, int)
 	 */
+	@Override
 	public String attemptToAcquireLock(final String key, final long timeoutSec,
 			final int maxLockCount) {
 		if (key == null) {
@@ -150,9 +174,17 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			throw new IllegalArgumentException(
 					"MaxLockCount cannot be less then one.");
 		}
-		return jdbcTemplate.queryForObject(
-				CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK, String.class,
-				key, timeoutSec, maxLockCount);
+		return requiresNewTransactionTempalte
+				.execute(new TransactionCallback<String>() {
+
+					@Override
+					public String doInTransaction(TransactionStatus status) {
+						return jdbcTemplate.queryForObject(
+								CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK,
+								String.class, key, timeoutSec, maxLockCount);
+					}
+				});
+
 	}
 
 	/*
@@ -162,6 +194,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 * org.sagebionetworks.warehouse.workers.semaphore.MultipleLockSemaphore
 	 * #releaseLock(java.lang.String, java.lang.String)
 	 */
+	@Override
 	public void releaseLock(final String key, final String token) {
 		if (key == null) {
 			throw new IllegalArgumentException("Key cannot be null");
@@ -169,14 +202,17 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 		if (token == null) {
 			throw new IllegalArgumentException("Token cannot be null.");
 		}
-		int result = jdbcTemplate.queryForObject(
-				CALL_RELEASE_SEMAPHORE_LOCK, Integer.class, key, token);
-		if (result < 0) {
-			throw new LockKeyNotFoundException("Key not found: " + key);
-		} else if (result == 0) {
-			throw new LockReleaseFailedException("Key: " + key + " token: "
-					+ token + " has expired.");
-		}
+		requiresNewTransactionTempalte.execute(new TransactionCallback<Void>() {
+
+			@Override
+			public Void doInTransaction(TransactionStatus status) {
+				int result = jdbcTemplate.queryForObject(
+						CALL_RELEASE_SEMAPHORE_LOCK, Integer.class, key, token);
+				validateResults(key, token, result);
+				return null;
+			}
+		});
+
 	}
 
 	/*
@@ -187,7 +223,15 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 * #releaseAllLocks()
 	 */
 	public void releaseAllLocks() {
-		jdbcTemplate.update(SQL_TRUNCATE_LOCKS);
+		requiresNewTransactionTempalte.execute(new TransactionCallback<Void>() {
+
+			@Override
+			public Void doInTransaction(TransactionStatus status) {
+				jdbcTemplate.update(SQL_TRUNCATE_LOCKS);
+				return null;
+			}
+		});
+
 	}
 
 	/*
@@ -209,15 +253,32 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			throw new IllegalArgumentException(
 					"TimeoutSec cannot be less then one.");
 		}
-		int result = jdbcTemplate.queryForObject(
-				CALL_REFRESH_SEMAPHORE_LOCK, Integer.class, key,
-				token, timeoutSec);
+		requiresNewTransactionTempalte.execute(new TransactionCallback<Void>() {
+			@Override
+			public Void doInTransaction(TransactionStatus status) {
+				int result = jdbcTemplate.queryForObject(
+						CALL_REFRESH_SEMAPHORE_LOCK, Integer.class, key, token,
+						timeoutSec);
+				validateResults(key, token, result);
+				return null;
+			}
+		});
+	}
+	/**
+	 * Validate the result == 1, indicating a single row was updated.
+	 * 
+	 * @param key
+	 * @param token
+	 * @param result
+	 * @throws LockKeyNotFoundException for a result < 1
+	 * @throws LockReleaseFailedException for a result == 0
+	 */
+	private void validateResults(final String key, final String token,	int result) {
 		if (result < 0) {
 			throw new LockKeyNotFoundException("Key not found: " + key);
 		} else if (result == 0) {
-			throw new LockReleaseFailedException("Key: " + key + " token: "
-					+ token + " has expired.");
+			throw new LockReleaseFailedException("Key: " + key
+					+ " token: " + token + " has expired.");
 		}
 	}
-
 }
