@@ -78,9 +78,9 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 
 		// Create the tables
 		this.jdbcTemplate
-				.update(ClasspathUtils.loadStringFromClassPath(SEMAPHORE_MASTER_DDL_SQL));
+				.update(Utils.loadStringFromClassPath(SEMAPHORE_MASTER_DDL_SQL));
 		this.jdbcTemplate
-				.update(ClasspathUtils.loadStringFromClassPath(SEMAPHORE_LOCK_DDL_SQL));
+				.update(Utils.loadStringFromClassPath(SEMAPHORE_LOCK_DDL_SQL));
 		createProcedureIfDoesNotExist(ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK);
 		createProcedureIfDoesNotExist(RELEASE_SEMAPHORE_LOCK);
 		createProcedureIfDoesNotExist(REFRESH_SEMAPHORE_LOCK);
@@ -93,7 +93,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 */
 	private void createProcedureIfDoesNotExist(String name) {
 		try {
-			this.jdbcTemplate.update(ClasspathUtils.loadStringFromClassPath(String.format(
+			this.jdbcTemplate.update(Utils.loadStringFromClassPath(String.format(
 					PROCEDURE_DDL_SQL_TEMPLATE, name)));
 		} catch (DataAccessException e) {
 			String message = String.format(PROCEDURE_EXITS_TEMPLATE, name);
@@ -148,7 +148,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 		}
 		int result = jdbcTemplate.queryForObject(
 				CALL_RELEASE_SEMAPHORE_LOCK, Integer.class, key, token);
-		validateResults(key, token, result);
+		Utils.validateResults(key, token, result);
 	}
 
 	/*
@@ -184,23 +184,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 		int result = jdbcTemplate.queryForObject(
 				CALL_REFRESH_SEMAPHORE_LOCK, Integer.class, key, token,
 				timeoutSec);
-		validateResults(key, token, result);
+		Utils.validateResults(key, token, result);
 	}
-	/**
-	 * Validate the result == 1, indicating a single row was updated.
-	 * 
-	 * @param key
-	 * @param token
-	 * @param result
-	 * @throws LockKeyNotFoundException for a result < 1
-	 * @throws LockReleaseFailedException for a result == 0
-	 */
-	private void validateResults(final String key, final String token,	int result) {
-		if (result < 0) {
-			throw new LockKeyNotFoundException("Key not found: " + key);
-		} else if (result == 0) {
-			throw new LockReleaseFailedException("Key: " + key
-					+ " token: " + token + " has expired.");
-		}
-	}
+
 }

@@ -1,19 +1,20 @@
-CREATE PROCEDURE attemptToAcquireReadLock(IN lockKey VARCHAR(256), IN timeoutSec INT(4))
+CREATE PROCEDURE attemptToAcquireWriteLockPrecursor(IN lockKey VARCHAR(256), IN timeoutSec INT(4))
 BEGIN
+
 	DECLARE writeLockToken VARCHAR(256);
 	DECLARE precursorToken VARCHAR(256);
 
 	DECLARE newToken VARCHAR(256);
 	DECLARE newExpiresOn TIMESTAMP;
-
+	
 	/* Lock on master and get the state of the write an precursor tokens */
 	CALL lockOnWriteReadMaster(lockKey, writeLockToken, precursorToken);
 
-	/* A read lock can be acquired if there is no write lock or precursor lock */
+	/* A precursor lock can be acquired if there is no write lock or precursor lock */
 	IF writeLockToken IS NULL AND precursorToken IS NULL THEN
 		SET newToken = UUID();
 		SET newExpiresOn = CURRENT_TIMESTAMP + INTERVAL timeoutSec SECOND;
-		INSERT INTO WRITE_READ_LOCK (LOCK_KEY, TOKEN, EXPIRES_ON) VALUES (lockKey, newToken, newExpiresOn);
+		UPDATE WRITE_READ_MASTER SET PRECURSOR_TOKEN = newToken, EXPIRES_ON = newExpiresOn;
 	ELSE
 		SET newToken = NULL;
 	END IF;

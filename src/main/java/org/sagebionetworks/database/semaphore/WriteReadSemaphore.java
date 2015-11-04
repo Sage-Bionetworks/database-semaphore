@@ -1,6 +1,5 @@
 package org.sagebionetworks.database.semaphore;
 
-
 /**
  * An abstraction for a Semaphore that issues either exclusive or shared locks.
  * This type of semaphore is useful for scenarios where there can be either a
@@ -27,7 +26,6 @@ package org.sagebionetworks.database.semaphore;
  * 
  */
 public interface WriteReadSemaphore {
-	int WRITE_LOCK_PRECURSOR_TIMEOUT = 0;
 
 	/**
 	 * Attempt to acquire a read-lock (shared) on the resource identified by the
@@ -90,10 +88,13 @@ public interface WriteReadSemaphore {
 	 * 
 	 * @param lockKey
 	 *            Identifies the resource to lock.
+	 * @param timoutSec
+	 *            The number of seconds the lock can be held before it will 
+	 *            automatically be release.
 	 * @return The write-lock-precursor token. Returns null if the lock cannot
 	 *         be acquired at this time.
 	 */
-	public String acquireWriteLockPrecursor(String lockKey);
+	public String acquireWriteLockPrecursor(String lockKey, long timeoutSec);
 
 	/**
 	 * <p>
@@ -153,11 +154,5 @@ public interface WriteReadSemaphore {
 	 */
 	public void releaseAllLocks();
 
-	/**
-	 * Before a read or write lock can be acquired it must be setup.
-	 * 
-	 * @param key
-	 */
-	public void setupLock(String lockKey);
 
 }
