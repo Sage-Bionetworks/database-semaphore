@@ -24,13 +24,13 @@
 		<property name="validationQuery" value = "SELECT 1" />
 	</bean>
 	
-	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
-			<constructor-arg ref="dataSourcePool"></constructor-arg>
-	</bean>
-
 	<bean id="semaphore"
 		class="org.sagebionetworks.database.semaphore.CountingSemaphoreImpl">
 		<constructor-arg ref="dataSourcePool"></constructor-arg>
-		<constructor-arg ref="transactionManager"></constructor-arg>
+	</bean>
+	
+	<bean id="writeReadsemaphore"
+		class="org.sagebionetworks.database.semaphore.WriteReadSemaphoreImpl">
+		<constructor-arg ref="dataSourcePool"></constructor-arg>
 	</bean>
 </beans>

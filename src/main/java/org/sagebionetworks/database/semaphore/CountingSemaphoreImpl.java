@@ -2,24 +2,12 @@ package org.sagebionetworks.database.semaphore;
 
 import static org.sagebionetworks.database.semaphore.Sql.TABLE_SEMAPHORE_LOCK;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.sql.Connection;
-
 import javax.sql.DataSource;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.DefaultTransactionDefinition;
-import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * <p>
@@ -68,10 +56,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	private static final String PROCEDURE_DDL_SQL_TEMPLATE = "schema/%s.ddl.sql";
 	private static final String PROCEDURE_EXITS_TEMPLATE = "PROCEDURE %s already exists";
 
-	TransactionTemplate requiresNewTransactionTempalte;
 	private JdbcTemplate jdbcTemplate;
-
-	DataSource dataSourcePool;
 
 	/**
 	 * Create a new CountingkSemaphore. This implementation depends on two
@@ -85,30 +70,17 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 *            The singleton transaction manager.
 	 * 
 	 */
-	public CountingSemaphoreImpl(DataSource dataSourcePool,
-			PlatformTransactionManager transactionManager) {
+	public CountingSemaphoreImpl(DataSource dataSourcePool) {
 		if (dataSourcePool == null) {
 			throw new IllegalArgumentException("DataSource cannot be null");
 		}
-		if (transactionManager == null) {
-			throw new IllegalArgumentException("TransactionManager cannot be null");
-		}
-		DefaultTransactionDefinition transactionDef = new DefaultTransactionDefinition();
-		transactionDef.setIsolationLevel(Connection.TRANSACTION_READ_COMMITTED);
-		transactionDef.setReadOnly(false);
-		transactionDef
-				.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-		transactionDef.setName("CountingSemaphoreImpl");
-		// This will manage transactions for calls that need it.
-		requiresNewTransactionTempalte = new TransactionTemplate(
-				transactionManager, transactionDef);
 		jdbcTemplate = new JdbcTemplate(dataSourcePool);
 
 		// Create the tables
 		this.jdbcTemplate
-				.update(loadStringFromClassPath(SEMAPHORE_MASTER_DDL_SQL));
+				.update(Utils.loadStringFromClassPath(SEMAPHORE_MASTER_DDL_SQL));
 		this.jdbcTemplate
-				.update(loadStringFromClassPath(SEMAPHORE_LOCK_DDL_SQL));
+				.update(Utils.loadStringFromClassPath(SEMAPHORE_LOCK_DDL_SQL));
 		createProcedureIfDoesNotExist(ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK);
 		createProcedureIfDoesNotExist(RELEASE_SEMAPHORE_LOCK);
 		createProcedureIfDoesNotExist(REFRESH_SEMAPHORE_LOCK);
@@ -121,7 +93,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 */
 	private void createProcedureIfDoesNotExist(String name) {
 		try {
-			this.jdbcTemplate.update(loadStringFromClassPath(String.format(
+			this.jdbcTemplate.update(Utils.loadStringFromClassPath(String.format(
 					PROCEDURE_DDL_SQL_TEMPLATE, name)));
 		} catch (DataAccessException e) {
 			String message = String.format(PROCEDURE_EXITS_TEMPLATE, name);
@@ -132,27 +104,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			}
 		}
 	}
-
-	/**
-	 * Simple utility to load a class path file as a string.
-	 * 
-	 * @param fileName
-	 * @return
-	 */
-	public static String loadStringFromClassPath(String fileName) {
-		InputStream in = CountingSemaphoreImpl.class.getClassLoader()
-				.getResourceAsStream(fileName);
-		if (in == null) {
-			throw new IllegalArgumentException("Cannot find: " + fileName
-					+ " on the classpath");
-		}
-		try {
-			return IOUtils.toString(in, "UTF-8");
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
+	
 	/*
 	 * (non-Javadoc)
 	 * 
@@ -174,17 +126,9 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			throw new IllegalArgumentException(
 					"MaxLockCount cannot be less then one.");
 		}
-		return requiresNewTransactionTempalte
-				.execute(new TransactionCallback<String>() {
-
-					@Override
-					public String doInTransaction(TransactionStatus status) {
-						return jdbcTemplate.queryForObject(
-								CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK,
-								String.class, key, timeoutSec, maxLockCount);
-					}
-				});
-
+		return jdbcTemplate.queryForObject(
+				CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK,
+				String.class, key, timeoutSec, maxLockCount);
 	}
 
 	/*
@@ -202,17 +146,9 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 		if (token == null) {
 			throw new IllegalArgumentException("Token cannot be null.");
 		}
-		requiresNewTransactionTempalte.execute(new TransactionCallback<Void>() {
-
-			@Override
-			public Void doInTransaction(TransactionStatus status) {
-				int result = jdbcTemplate.queryForObject(
-						CALL_RELEASE_SEMAPHORE_LOCK, Integer.class, key, token);
-				validateResults(key, token, result);
-				return null;
-			}
-		});
-
+		int result = jdbcTemplate.queryForObject(
+				CALL_RELEASE_SEMAPHORE_LOCK, Integer.class, key, token);
+		Utils.validateResults(key, token, result);
 	}
 
 	/*
@@ -223,15 +159,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 * #releaseAllLocks()
 	 */
 	public void releaseAllLocks() {
-		requiresNewTransactionTempalte.execute(new TransactionCallback<Void>() {
-
-			@Override
-			public Void doInTransaction(TransactionStatus status) {
-				jdbcTemplate.update(SQL_TRUNCATE_LOCKS);
-				return null;
-			}
-		});
-
+		jdbcTemplate.update(SQL_TRUNCATE_LOCKS);
 	}
 
 	/*
@@ -253,32 +181,10 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			throw new IllegalArgumentException(
 					"TimeoutSec cannot be less then one.");
 		}
-		requiresNewTransactionTempalte.execute(new TransactionCallback<Void>() {
-			@Override
-			public Void doInTransaction(TransactionStatus status) {
-				int result = jdbcTemplate.queryForObject(
-						CALL_REFRESH_SEMAPHORE_LOCK, Integer.class, key, token,
-						timeoutSec);
-				validateResults(key, token, result);
-				return null;
-			}
-		});
+		int result = jdbcTemplate.queryForObject(
+				CALL_REFRESH_SEMAPHORE_LOCK, Integer.class, key, token,
+				timeoutSec);
+		Utils.validateResults(key, token, result);
 	}
-	/**
-	 * Validate the result == 1, indicating a single row was updated.
-	 * 
-	 * @param key
-	 * @param token
-	 * @param result
-	 * @throws LockKeyNotFoundException for a result < 1
-	 * @throws LockReleaseFailedException for a result == 0
-	 */
-	private void validateResults(final String key, final String token,	int result) {
-		if (result < 0) {
-			throw new LockKeyNotFoundException("Key not found: " + key);
-		} else if (result == 0) {
-			throw new LockReleaseFailedException("Key: " + key
-					+ " token: " + token + " has expired.");
-		}
-	}
+
 }
