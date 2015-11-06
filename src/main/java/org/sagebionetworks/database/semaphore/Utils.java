@@ -45,4 +45,19 @@ public class Utils {
 					+ " token: " + token + " has expired.");
 		}
 	}
+	
+	/**
+	 * 	Validate the result == 1, indicating a single row was updated.
+	 * @param key
+	 * @param token
+	 * @param result
+	 */
+	public static void validateNotExpired(final String key, final String token, int result) {
+		if (result < 0) {
+			throw new LockKeyNotFoundException("Key not found: " + key);
+		} else if (result == 0) {
+			throw new LockExpiredException("Key: " + key
+					+ " token: " + token + " has expired.");
+		}
+	}
 }

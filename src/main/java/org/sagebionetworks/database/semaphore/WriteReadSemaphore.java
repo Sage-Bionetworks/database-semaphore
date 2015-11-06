@@ -1,9 +1,12 @@
 package org.sagebionetworks.database.semaphore;
 
 /**
- * An abstraction for a Semaphore that issues either exclusive or shared locks.
- * This type of semaphore is useful for scenarios where there can be either a
- * single writer (exclusive) or many readers (shared).
+ * An abstraction for a Semaphore that issues either exclusive (write) or shared
+ * locks (read). This type of semaphore is useful for scenarios where there can
+ * be either a single writer (exclusive) or many readers (shared). Each attempt
+ * to acquire a lock is a non-blocking call. This means if a lock cannot be
+ * acquired the call will no block until a lock can be acquired, rather a null
+ * token will be returned.
  * 
  * Implementations of this DAO will have the following characteristics:
  * <ul>
@@ -34,13 +37,13 @@ public interface WriteReadSemaphore {
 	 * @param lockKey
 	 *            Identifies the resource to lock.
 	 * @param The
-	 *            maximum number of milliseconds that this read-lock will be
-	 *            held. If a lock is not release before this timeout it might be
+	 *            maximum number of seconds that this read-lock will be held. If
+	 *            a lock is not release before this timeout it might be
 	 *            forcefully released in order to acquire a write-lock.
 	 * @return The token of the read-lock is returned when a lock is acquired.
 	 *         Returns null if the lock cannot be acquired at this time.
 	 */
-	public String acquireReadLock(String lockKey, long timeoutMS);
+	public String acquireReadLock(String lockKey, long timeoutSec);
 
 	/**
 	 * When a read-lock (shared) is acquired, it is the responsibly of the lock
@@ -52,9 +55,7 @@ public interface WriteReadSemaphore {
 	 *            The token issued when the read-lock was acquired.
 	 * @throws LockReleaseFailedException
 	 *             This is thrown when the lock was forcibly revoked because it
-	 *             was not release before the requested timeout expired. If this
-	 *             occurs, the timeout set when the lock was acquired might be
-	 *             too low.
+	 *             was not release before the requested timeout expired.
 	 */
 	public void releaseReadLock(String lockKey, String token)
 			throws LockReleaseFailedException;
@@ -74,9 +75,8 @@ public interface WriteReadSemaphore {
 	 * <p>
 	 * The holder of the write-lock-precursor must wait for all outstanding
 	 * read-locks to either be released normally or forcibly (in the case of
-	 * expired locks). The write-lock-precursor has a short timeout (5 seconds).
-	 * However, each attempt to acquire the actual write-lock will refresh the
-	 * expiration timer of the write-lock-precursor.
+	 * expired locks). However, each attempt to acquire the actual write-lock
+	 * will refresh the expiration timer of the write-lock-precursor.
 	 * </p>
 	 * <p>
 	 * The write-lock-precursor token returned by this method is a required
@@ -89,7 +89,7 @@ public interface WriteReadSemaphore {
 	 * @param lockKey
 	 *            Identifies the resource to lock.
 	 * @param timoutSec
-	 *            The number of seconds the lock can be held before it will 
+	 *            The number of seconds the lock can be held before it will
 	 *            automatically be release.
 	 * @return The write-lock-precursor token. Returns null if the lock cannot
 	 *         be acquired at this time.
@@ -116,8 +116,8 @@ public interface WriteReadSemaphore {
 	 * @param exclusiveLockPrecursorToken
 	 *            This token is issued by
 	 *            {@link #acquireExclusiveLockPrecursor(String)}
-	 * @param timeoutMS
-	 *            The number of milliseconds that the caller expects to hold the
+	 * @param timeoutSec
+	 *            The number of seconds that the caller expects to hold the
 	 *            write-lock on this resource. If the write-lock is not release
 	 *            before this amount of time has elapsed, the lock could be
 	 *            forcibly released and issued to another caller.
@@ -129,7 +129,7 @@ public interface WriteReadSemaphore {
 	 *         read-locks.
 	 */
 	public String acquireWriteLock(String lockKey,
-			String exclusiveLockPrecursorToken, long timeoutMS);
+			String exclusiveLockPrecursorToken, long timeoutSec);
 
 	/**
 	 * When a write-lock (exclusive) is acquired, it is the responsibly of the
@@ -141,9 +141,7 @@ public interface WriteReadSemaphore {
 	 *            The token issued when the write-lock was acquired.
 	 * @throws LockReleaseFailedException
 	 *             This is thrown when the lock was forcibly revoked because it
-	 *             was not release before the requested timeout expired. If this
-	 *             occurs, the timeout set when the lock was acquired might be
-	 *             too low.
+	 *             was not release before the requested timeout expired.
 	 */
 	public void releaseWriteLock(String lockKey, String token)
 			throws LockReleaseFailedException;
@@ -154,5 +152,41 @@ public interface WriteReadSemaphore {
 	 */
 	public void releaseAllLocks();
 
+	/**
+	 * Extend the timeout of a read lock.
+	 * 
+	 * @param lockKey
+	 *            Identifies the resource that was locked.
+	 * @param token
+	 *            The token issued when lock was acquired.
+	 * @param timeoutSec
+	 *            The number of seconds that the caller expects to hold the lock
+	 *            on this resource. If the lock is not release before this
+	 *            amount of time has elapsed, the lock could be forcibly
+	 *            released and issued to another caller.
+	 * @throws LockExpiredException
+	 *             When lock timeout cannot be extend because it already
+	 *             expired.
+	 */
+	public void refreshReadLock(String lockKey, String token, long timeoutSec)
+			throws LockExpiredException;
 
+	/**
+	 * Extends the timeout of a write lock.
+	 * 
+	 * @param lockKey
+	 *            Identifies the resource that was locked.
+	 * @param token
+	 *            The token issued when lock was acquired.
+	 * @param timeoutSec
+	 *            The number of seconds that the caller expects to hold the lock
+	 *            on this resource. If the lock is not release before this
+	 *            amount of time has elapsed, the lock could be forcibly
+	 *            released and issued to another caller.
+	 * @throws LockExpiredException
+	 *             When lock timeout cannot be extend because it already
+	 *             expired.
+	 */
+	public void refreshWriteLock(String lockKey, String token, long timeoutSec)
+			throws LockExpiredException;
 }
