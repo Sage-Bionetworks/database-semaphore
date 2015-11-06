@@ -1,4 +1,4 @@
-CREATE PROCEDURE attemptToAcquireWriteLock(IN lockKey VARCHAR(256), inPrecursorToken VARCHAR(256), IN timeoutSec INT(4))
+CREATE PROCEDURE attemptToAcquireWriteLock(IN lockKey VARCHAR(256), IN inPrecursorToken VARCHAR(256), IN timeoutSec INT(4))
 BEGIN
 
 	DECLARE writeLockToken VARCHAR(256);
@@ -24,17 +24,20 @@ BEGIN
 	IF writeLockToken IS NOT NULL THEN
 		/* another write token has been issued so the passed precursor is expired. */
 		SET newToken = expiredResults;
-	ELSEIF inPrecursorToken <> precursorToken THEN
+	ELSEIF precursorToken IS NULL OR inPrecursorToken <> precursorToken THEN
 		/* The passed precursor does not match the existing so it is expired */
 		SET newToken = expiredResults;
 	ELSEIF countReadLocks < 1 THEN
 		/*  The precursor matches and there are no outstanding read locks so a write lock can be issued.*/
 		SET newToken = UUID();
 		SET newExpiresOn = CURRENT_TIMESTAMP + INTERVAL timeoutSec SECOND;
-		UPDATE WRITE_READ_MASTER SET WRITE_LOCK_TOKEN = newToken, EXPIRES_ON = newExpiresOn;
+		UPDATE WRITE_READ_MASTER SET WRITE_LOCK_TOKEN = newToken, EXPIRES_ON = newExpiresOn WHERE LOCK_KEY = lockKey;
 	ELSE
 		/* Precursor matches but there are outstanding read locks so a write lock cannot be issued at this time. */
 		SET newToken = NULL;
+		/* Refresh the precursor expires time.*/
+		SET newExpiresOn = CURRENT_TIMESTAMP + INTERVAL timeoutSec SECOND;
+		UPDATE WRITE_READ_MASTER SET EXPIRES_ON = newExpiresOn WHERE LOCK_KEY = lockKey;
 	END IF;
 	
 	COMMIT;
