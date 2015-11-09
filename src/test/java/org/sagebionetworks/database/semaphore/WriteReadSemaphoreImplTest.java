@@ -1,8 +1,6 @@
 package org.sagebionetworks.database.semaphore;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import org.junit.After;
 import org.junit.Before;
@@ -210,6 +208,11 @@ public class WriteReadSemaphoreImplTest {
 			writeReadsemaphore.refreshReadLock(key, token, 2);
 			Thread.sleep(1000);
 		}
+		// 
+		String writeLockPrecursor = writeReadsemaphore.acquireWriteLockPrecursor(key, 2);
+		assertNotNull(writeLockPrecursor);
+		String writeLock = writeReadsemaphore.acquireWriteLock(key, writeLockPrecursor, 4);
+		assertEquals(null, writeLock);
 		// The total time should now have exceeded the original lock timeout.
 		writeReadsemaphore.releaseReadLock(key, token);
 	}
@@ -238,6 +241,9 @@ public class WriteReadSemaphoreImplTest {
 			writeReadsemaphore.refreshWriteLock(key, token, 2);
 			Thread.sleep(1000);
 		}
+		// If the refresh did not work then a read lock could be issued.
+		String readLock  = writeReadsemaphore.acquireReadLock(key, 1);
+		assertEquals(null, readLock);
 		// The total time should now have exceeded the original lock timeout.
 		writeReadsemaphore.releaseWriteLock(key, token);
 	}
@@ -254,6 +260,60 @@ public class WriteReadSemaphoreImplTest {
 		assertNotNull(readLock);
 		// This should fail since the lock was not refreshed before it expired.
 		writeReadsemaphore.refreshWriteLock(key, token, 2);
+	}
+	
+	@Test
+	public void testMultipleWriteLocks() throws Exception{
+		String key1 = "456";
+		String key2 = "567";
+		// acquire both locks
+		String preToken1 = writeReadsemaphore.acquireWriteLockPrecursor(key1, 2);
+		String preToken2 = writeReadsemaphore.acquireWriteLockPrecursor(key2, 2);
+		// Should not be able to get reads on either
+		validateCannotGetRead(1, key1, key2);
+		
+		// get both write locks
+		String writeToken1 = writeReadsemaphore.acquireWriteLock(key1, preToken1, 2);
+		assertNotNull(writeToken1);
+		String writeToken2 = writeReadsemaphore.acquireWriteLock(key2, preToken2, 2);
+		assertNotNull(writeToken2);
+		assertFalse(writeToken1.equals(writeToken2));
+		// Refresh both locks
+		writeReadsemaphore.refreshWriteLock(key1, writeToken1, 2);
+		writeReadsemaphore.refreshWriteLock(key2, writeToken2, 2);
+		// Should not be able to get reads on either
+		validateCannotGetRead(1, key1, key2);
+		// Should be able to release both locks
+		writeReadsemaphore.releaseWriteLock(key1, writeToken1);
+		writeReadsemaphore.releaseWriteLock(key2, writeToken2);
+	}
+	
+	@Test
+	public void testMultipleReadLocks() throws Exception {
+		String key1 = "456";
+		String key2 = "567";
+		String readToken1 = writeReadsemaphore.acquireReadLock(key1, 1);
+		assertNotNull(readToken1);
+		String readToken2 = writeReadsemaphore.acquireReadLock(key2, 1);
+		assertNotNull(readToken2);
+		// should be able to refresh both
+		writeReadsemaphore.refreshReadLock(key1, readToken1, 1);
+		writeReadsemaphore.refreshReadLock(key2, readToken2, 1);
+		// Should be able to release both
+		writeReadsemaphore.releaseReadLock(key1, readToken1);
+		writeReadsemaphore.releaseReadLock(key2, readToken2);
+	}
+	
+	/**
+	 * Helper to validate read locks cannot be aquired for the given keys.
+	 * @param timoutSec
+	 * @param keys
+	 */
+	private void validateCannotGetRead(int timoutSec, String...keys){
+		for(String key: keys){
+			String token = writeReadsemaphore.acquireReadLock(key, timoutSec);
+			assertEquals("Should not have been able to get a read locks but recieved token: "+token, null, token);
+		}
 	}
 
 }
