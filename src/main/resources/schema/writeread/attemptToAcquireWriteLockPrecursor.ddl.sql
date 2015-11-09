@@ -14,7 +14,7 @@ BEGIN
 	IF writeLockToken IS NULL AND precursorToken IS NULL THEN
 		SET newToken = UUID();
 		SET newExpiresOn = CURRENT_TIMESTAMP + INTERVAL timeoutSec SECOND;
-		UPDATE WRITE_READ_MASTER SET PRECURSOR_TOKEN = newToken, EXPIRES_ON = newExpiresOn;
+		UPDATE WRITE_READ_MASTER SET PRECURSOR_TOKEN = newToken, EXPIRES_ON = newExpiresOn WHERE LOCK_KEY = lockKey;
 	ELSE
 		SET newToken = NULL;
 	END IF;
