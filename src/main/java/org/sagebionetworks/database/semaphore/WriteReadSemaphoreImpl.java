@@ -6,6 +6,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 	
@@ -37,13 +41,26 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 	private static final Logger log = LogManager
 			.getLogger(WriteReadSemaphoreImpl.class);
 	
+	/*
+	 * All operations for this class require a READ_COMMITED transaction
+	 * isolation level.
+	 */
+	TransactionTemplate readCommitedTransactionTemplate;
 	private JdbcTemplate jdbcTemplate;
 	
-	public WriteReadSemaphoreImpl(DataSource dataSourcePool) {
+	public WriteReadSemaphoreImpl(DataSource dataSourcePool,
+			PlatformTransactionManager transactionManager) {
 		if (dataSourcePool == null) {
 			throw new IllegalArgumentException("DataSource cannot be null");
 		}
 		jdbcTemplate = new JdbcTemplate(dataSourcePool);
+		/*
+		 * All operations for this class require a READ_COMMITED transaction
+		 * isolation level.
+		 */
+		readCommitedTransactionTemplate = Utils
+				.createReadCommitedTransactionTempalte(transactionManager,
+						"CountingSemaphoreImpl");
 		// Create the tables
 		this.jdbcTemplate
 				.update(Utils.loadStringFromClassPath(SEMAPHORE_WRITE_READ_MASTER_DDL_SQL));
@@ -78,7 +95,7 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 	 * @see org.sagebionetworks.database.semaphore.WriteReadSemaphore#acquireReadLock(java.lang.String, long)
 	 */
 	@Override
-	public String acquireReadLock(String lockKey, long timeoutSec) {
+	public String acquireReadLock(final String lockKey, final long timeoutSec) {
 		if (lockKey == null) {
 			throw new IllegalArgumentException("Key cannot be null");
 		}
@@ -86,8 +103,15 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 			throw new IllegalArgumentException(
 					"TimeoutSec cannot be less then one.");
 		}
-		return jdbcTemplate.queryForObject(CALL_ATTEMPT_TO_ACQUIRE_READ_LOCK,
-				String.class, lockKey, timeoutSec);
+		return readCommitedTransactionTemplate.execute(new TransactionCallback<String>() {
+
+			@Override
+			public String doInTransaction(TransactionStatus status) {
+				return jdbcTemplate.queryForObject(CALL_ATTEMPT_TO_ACQUIRE_READ_LOCK,
+						String.class, lockKey, timeoutSec);
+			}
+		});
+
 	}
 
 	/*
@@ -95,7 +119,7 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 	 * @see org.sagebionetworks.database.semaphore.WriteReadSemaphore#releaseReadLock(java.lang.String, java.lang.String)
 	 */
 	@Override
-	public void releaseReadLock(String lockKey, String token)
+	public void releaseReadLock(final String lockKey, final String token)
 			throws LockReleaseFailedException {
 		if (lockKey == null) {
 			throw new IllegalArgumentException("Key cannot be null");
@@ -104,9 +128,16 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 			throw new IllegalArgumentException(
 					"Token cannot be null.");
 		}
-		int results = jdbcTemplate.queryForObject(CALL_RELEASE_READ_LOCK,
-				Integer.class, lockKey, token);
-		Utils.validateResults(lockKey, token, results);
+		readCommitedTransactionTemplate.execute(new TransactionCallback<Void>() {
+			@Override
+			public Void doInTransaction(TransactionStatus status) {
+				int results = jdbcTemplate.queryForObject(CALL_RELEASE_READ_LOCK,
+						Integer.class, lockKey, token);
+				Utils.validateResults(lockKey, token, results);
+				return null;
+			}
+		});
+
 	}
 
 	/*
@@ -114,8 +145,8 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 	 * @see org.sagebionetworks.database.semaphore.WriteReadSemaphore#acquireWriteLock(java.lang.String, java.lang.String, long)
 	 */
 	@Override
-	public String acquireWriteLock(String lockKey,
-			String precursorToken, long timeoutSec) {
+	public String acquireWriteLock(final String lockKey,
+			final String precursorToken, final long timeoutSec) {
 		if (lockKey == null) {
 			throw new IllegalArgumentException("Key cannot be null");
 		}
@@ -126,12 +157,19 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 			throw new IllegalArgumentException(
 					"TimeoutSec cannot be less then one.");
 		}
-		String results = jdbcTemplate.queryForObject(CALL_ATTEMPT_TO_ACQUIRE_WRITE_LOCK,
-				String.class, lockKey, precursorToken, timeoutSec);
-		if(EXPIRED.equals(results)){
-			throw new LockExpiredException("Precursor lock has expired for key: " + lockKey);
-		}
-		return results;
+		return readCommitedTransactionTemplate.execute(new TransactionCallback<String>() {
+
+			@Override
+			public String doInTransaction(TransactionStatus status) {
+				String results = jdbcTemplate.queryForObject(CALL_ATTEMPT_TO_ACQUIRE_WRITE_LOCK,
+						String.class, lockKey, precursorToken, timeoutSec);
+				if(EXPIRED.equals(results)){
+					throw new LockExpiredException("Precursor lock has expired for key: " + lockKey);
+				}
+				return results;
+			}
+		});
+
 	}
 
 	/*
@@ -139,7 +177,7 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 	 * @see org.sagebionetworks.database.semaphore.WriteReadSemaphore#releaseWriteLock(java.lang.String, java.lang.String)
 	 */
 	@Override
-	public void releaseWriteLock(String lockKey, String token)
+	public void releaseWriteLock(final String lockKey, final String token)
 			throws LockReleaseFailedException {
 		if (lockKey == null) {
 			throw new IllegalArgumentException("Key cannot be null");
@@ -148,9 +186,16 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 			throw new IllegalArgumentException(
 					"Token cannot be null.");
 		}
-		int results = jdbcTemplate.queryForObject(CALL_RELEASE_WRITE_LOCK,
-				Integer.class, lockKey, token);
-		Utils.validateResults(lockKey, token, results);
+		readCommitedTransactionTemplate.execute(new TransactionCallback<Void>() {
+			@Override
+			public Void doInTransaction(TransactionStatus status) {
+				int results = jdbcTemplate.queryForObject(CALL_RELEASE_WRITE_LOCK,
+						Integer.class, lockKey, token);
+				Utils.validateResults(lockKey, token, results);
+				return null;
+			}
+		});
+
 	}
 
 	/*
@@ -167,7 +212,7 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 	 * @see org.sagebionetworks.database.semaphore.WriteReadSemaphore#acquireWriteLockPrecursor(java.lang.String, long)
 	 */
 	@Override
-	public String acquireWriteLockPrecursor(String lockKey, long timeoutSec) {
+	public String acquireWriteLockPrecursor(final String lockKey, final long timeoutSec) {
 		if (lockKey == null) {
 			throw new IllegalArgumentException("Key cannot be null");
 		}
@@ -175,8 +220,14 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 			throw new IllegalArgumentException(
 					"TimeoutSec cannot be less then one.");
 		}
-		return jdbcTemplate.queryForObject(CALL_ATTEMPT_TO_ACQUIRE_WRITE_LOCK_PRECURSOR,
-				String.class, lockKey, timeoutSec);
+		return readCommitedTransactionTemplate.execute(new TransactionCallback<String>() {
+			@Override
+			public String doInTransaction(TransactionStatus status) {
+				return jdbcTemplate.queryForObject(CALL_ATTEMPT_TO_ACQUIRE_WRITE_LOCK_PRECURSOR,
+						String.class, lockKey, timeoutSec);
+			}
+		});
+
 	}
 
 	/*
@@ -184,7 +235,7 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 	 * @see org.sagebionetworks.database.semaphore.WriteReadSemaphore#refreshReadLock(java.lang.String, java.lang.String, long)
 	 */
 	@Override
-	public void refreshReadLock(String lockKey, String token, long timeoutSec)
+	public void refreshReadLock(final String lockKey, final String token, final long timeoutSec)
 			throws LockExpiredException {
 		if (lockKey == null) {
 			throw new IllegalArgumentException("Key cannot be null");
@@ -197,9 +248,17 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 			throw new IllegalArgumentException(
 					"TimeoutSec cannot be less then one.");
 		}
-		int results = jdbcTemplate.queryForObject(CALL_REFRESH_READ_LOCK,
-				Integer.class, lockKey, token, timeoutSec);
-		Utils.validateNotExpired(lockKey, token, results);
+		readCommitedTransactionTemplate.execute(new TransactionCallback<Void>() {
+
+			@Override
+			public Void doInTransaction(TransactionStatus status) {
+				int results = jdbcTemplate.queryForObject(CALL_REFRESH_READ_LOCK,
+						Integer.class, lockKey, token, timeoutSec);
+				Utils.validateNotExpired(lockKey, token, results);
+				return null;
+			}
+		});
+
 	}
 
 	/*
@@ -207,7 +266,7 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 	 * @see org.sagebionetworks.database.semaphore.WriteReadSemaphore#refreshWriteLock(java.lang.String, java.lang.String, long)
 	 */
 	@Override
-	public void refreshWriteLock(String lockKey, String token, long timeoutSec)
+	public void refreshWriteLock(final String lockKey, final String token,final long timeoutSec)
 			throws LockExpiredException {
 		if (lockKey == null) {
 			throw new IllegalArgumentException("Key cannot be null");
@@ -220,9 +279,17 @@ public class WriteReadSemaphoreImpl implements WriteReadSemaphore {
 			throw new IllegalArgumentException(
 					"TimeoutSec cannot be less then one.");
 		}
-		int results = jdbcTemplate.queryForObject(CALL_REFRESH_WRITE_LOCK,
-				Integer.class, lockKey, token, timeoutSec);
-		Utils.validateNotExpired(lockKey, token, results);
+		readCommitedTransactionTemplate.execute(new TransactionCallback<Void>() {
+
+			@Override
+			public Void doInTransaction(TransactionStatus status) {
+				int results = jdbcTemplate.queryForObject(CALL_REFRESH_WRITE_LOCK,
+						Integer.class, lockKey, token, timeoutSec);
+				Utils.validateNotExpired(lockKey, token, results);
+				return null;
+			}
+		});
+
 	}
 
 }
