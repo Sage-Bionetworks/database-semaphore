@@ -74,7 +74,7 @@ Add the following the "VM Arguments" for the runner:
 "-Djdbc.password=<password>"
 ````
 ### Dependencies
-This project depends on spring-jdbc 4.1.6.RELEASE or newer.  All Spring dependencies are marked with a scope=provided so it should work with your version of Spring.
+This project depends on spring-jdbc 4.3.20.RELEASE or newer.  All Spring dependencies are marked with a scope=provided so it should work with your version of Spring.
 The CountingkSemaphoreImpl is a simple Java object so it should be usable with any Inversion Of Control (IoC) system.  This project uses Spring IoC for testing only.  
 
  
