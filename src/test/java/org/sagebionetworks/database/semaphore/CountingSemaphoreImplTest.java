@@ -152,7 +152,7 @@ public class CountingSemaphoreImplTest {
 	@Test
 	public void testConcurrent() throws Exception{
 		int maxThreads = 25;
-		long lockTimeoutSec = 2;
+		long lockTimeoutSec = 20;
 		int maxLockCount = maxThreads-1;
 		ExecutorService executorService =Executors.newFixedThreadPool(maxThreads);
 		List<Callable<Boolean>> runners = new LinkedList<Callable<Boolean>>();
@@ -188,7 +188,7 @@ public class CountingSemaphoreImplTest {
 			this.key = key;
 			this.lockTimeoutSec = lockTimeoutSec;
 			this.maxLockCount = maxLockCount;
-			this.sleepTimeMs = lockTimeoutSec/2*1000;
+			this.sleepTimeMs = 1000L;
 		}
 
 		public Boolean call() throws Exception {

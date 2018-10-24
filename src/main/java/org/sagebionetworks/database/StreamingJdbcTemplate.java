@@ -36,13 +36,12 @@ public class StreamingJdbcTemplate extends JdbcTemplate {
 	}
 
 	/**
-	 * Overridden to allow a fetch size of Integer.MIN_VALUE
+	 * It is no longer necessary to override this method in spring 4.3.20.RELEASE +
+	 * as {@link #applyStatementSettings(Statement)} method will now forward the
+	 * fetch size of Integer.MIN_VALUE to the provided statement.
 	 */
 	@Override
 	protected void applyStatementSettings(Statement stmt) throws SQLException {
 		super.applyStatementSettings(stmt);
-		if (getFetchSize() == Integer.MIN_VALUE) {
-			stmt.setFetchSize(getFetchSize());
-		}
 	}
 }
