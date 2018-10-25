@@ -38,7 +38,7 @@ public class WriteReadSemaphoreImplTest {
 		
 		key = "123";
 		lockTimeoutSec = 10;
-		sleepTillExpiredMS = 1000*(long)lockTimeoutSec+1L;
+		sleepTillExpiredMS = 1000*((long)lockTimeoutSec+1L);
 	}
 	
 	@After
