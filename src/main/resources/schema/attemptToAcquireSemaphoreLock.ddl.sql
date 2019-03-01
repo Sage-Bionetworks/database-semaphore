@@ -3,9 +3,13 @@ BEGIN
 	DECLARE lockKeyExists VARCHAR(256);
 	DECLARE countOutstanding INT(4);
 	DECLARE newToken VARCHAR(256);
+	
+	/* ERROR CODE 3572 indicates NOWAIT for a lock was encountered.  For such cases null is returned. See: PLFM-5193 */
+	DECLARE EXIT HANDLER FOR 3572 SELECT NULL AS TOKEN;
+	
 	START TRANSACTION;
 	/* Acquire an exclusive lock on the master row.*/
-	SELECT LOCK_KEY INTO lockKeyExists FROM SEMAPHORE_MASTER WHERE LOCK_KEY = lockKey FOR UPDATE;
+	SELECT LOCK_KEY INTO lockKeyExists FROM SEMAPHORE_MASTER WHERE LOCK_KEY = lockKey FOR UPDATE NOWAIT;
 
 	/*	If the master does not exist then we need to create it in a new transaction */
     IF lockKeyExists IS NULL THEN
@@ -16,7 +20,7 @@ BEGIN
 		INSERT IGNORE INTO SEMAPHORE_MASTER (LOCK_KEY) VALUES (lockKey);
 		COMMIT;
 		START TRANSACTION;
-		SELECT LOCK_KEY INTO lockKeyExists FROM SEMAPHORE_MASTER WHERE LOCK_KEY = lockKey FOR UPDATE;
+		SELECT LOCK_KEY INTO lockKeyExists FROM SEMAPHORE_MASTER WHERE LOCK_KEY = lockKey FOR UPDATE NOWAIT;
     END IF;
 	/* Delete expired locks*/
 	DELETE FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey AND EXPIRES_ON < current_timestamp;
