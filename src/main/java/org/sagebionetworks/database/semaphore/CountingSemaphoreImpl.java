@@ -2,8 +2,6 @@ package org.sagebionetworks.database.semaphore;
 
 import static org.sagebionetworks.database.semaphore.Sql.TABLE_SEMAPHORE_LOCK;
 
-import java.sql.Connection;
-
 import javax.sql.DataSource;
 
 import org.apache.logging.log4j.LogManager;
@@ -11,11 +9,6 @@ import org.apache.logging.log4j.Logger;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.DefaultTransactionDefinition;
-import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * <p>
@@ -64,11 +57,11 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	private static final String PROCEDURE_DDL_SQL_TEMPLATE = "schema/%s.ddl.sql";
 	private static final String PROCEDURE_EXITS_TEMPLATE = "PROCEDURE %s already exists";
 	
-	/*
-	 * All operations for this class require a READ_COMMITED transaction
-	 * isolation level.
-	 */
-	TransactionTemplate readCommitedTransactionTemplate;
+//	/*
+//	 * All operations for this class require a READ_COMMITED transaction
+//	 * isolation level.
+//	 */
+//	TransactionTemplate readCommitedTransactionTemplate;
 	private JdbcTemplate jdbcTemplate;
 
 	/**
@@ -89,13 +82,13 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			throw new IllegalArgumentException("DataSource cannot be null");
 		}
 		jdbcTemplate = new JdbcTemplate(dataSourcePool);
-		/*
-		 * All operations for this class require a READ_COMMITED transaction
-		 * isolation level.
-		 */
-		readCommitedTransactionTemplate = Utils
-				.createReadCommitedTransactionTempalte(transactionManager,
-						"CountingSemaphoreImpl");
+//		/*
+//		 * All operations for this class require a READ_COMMITED transaction
+//		 * isolation level.
+//		 */
+//		readCommitedTransactionTemplate = Utils
+//				.createReadCommitedTransactionTempalte(transactionManager,
+//						"CountingSemaphoreImpl");
 
 		// Create the tables
 		this.jdbcTemplate.update(Utils
@@ -147,15 +140,9 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			throw new IllegalArgumentException(
 					"MaxLockCount cannot be less then one.");
 		}
-		return readCommitedTransactionTemplate
-				.execute(new TransactionCallback<String>() {
-					@Override
-					public String doInTransaction(TransactionStatus status) {
-						return jdbcTemplate.queryForObject(
-								CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK,
-								String.class, key, timeoutSec, maxLockCount);
-					}
-				});
+		return jdbcTemplate.queryForObject(
+				CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK,
+				String.class, key, timeoutSec, maxLockCount);
 
 	}
 
@@ -174,15 +161,9 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 		if (token == null) {
 			throw new IllegalArgumentException("Token cannot be null.");
 		}
-		readCommitedTransactionTemplate.execute(new TransactionCallback<Void>() {
-			@Override
-			public Void doInTransaction(TransactionStatus status) {
-				int result = jdbcTemplate.queryForObject(CALL_RELEASE_SEMAPHORE_LOCK,
-						Integer.class, key, token);
-				Utils.validateResults(key, token, result);
-				return null;
-			}
-		});
+		int result = jdbcTemplate.queryForObject(CALL_RELEASE_SEMAPHORE_LOCK,
+				Integer.class, key, token);
+		Utils.validateResults(key, token, result);
 
 	}
 
@@ -216,15 +197,9 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			throw new IllegalArgumentException(
 					"TimeoutSec cannot be less then one.");
 		}
-		readCommitedTransactionTemplate.execute(new TransactionCallback<Void>() {
-			@Override
-			public Void doInTransaction(TransactionStatus status) {
-				int result = jdbcTemplate.queryForObject(CALL_REFRESH_SEMAPHORE_LOCK,
-						Integer.class, key, token, timeoutSec);
-				Utils.validateResults(key, token, result);
-				return null;
-			}
-		});
+		int result = jdbcTemplate.queryForObject(CALL_REFRESH_SEMAPHORE_LOCK,
+				Integer.class, key, token, timeoutSec);
+		Utils.validateResults(key, token, result);
 	}
 
 }

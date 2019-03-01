@@ -169,7 +169,7 @@ public class CountingSemaphoreImplTest {
 				locksAcquired++;
 			}
 		}
-		assertTrue("Fewer than the max number of locks should be acquired.", locksAcquired < maxLockCount);
+		assertTrue("At least one lock should have been acquired", locksAcquired >= 1);
 	}
 	
 
@@ -193,7 +193,12 @@ public class CountingSemaphoreImplTest {
 
 		public Boolean call() throws Exception {
 			long start = System.currentTimeMillis();
-			String token = semaphore.attemptToAcquireLock(key, lockTimeoutSec, maxLockCount);
+			String token = null;
+			int count = 0;
+			// try up to 10 times to get a lock.
+			while((token = semaphore.attemptToAcquireLock(key, lockTimeoutSec, maxLockCount)) == null && count < 10){
+				count++;
+			}
 			log.info("AcquiredLock in "+(System.currentTimeMillis()-start)+" MS with token: "+token);
 			if(token != null){
 				try {

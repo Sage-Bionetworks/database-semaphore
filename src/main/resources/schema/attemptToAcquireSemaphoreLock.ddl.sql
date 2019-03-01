@@ -7,6 +7,8 @@ BEGIN
 	/* ERROR CODE 3572 indicates NOWAIT for a lock was encountered.  For such cases null is returned. See: PLFM-5193 */
 	DECLARE EXIT HANDLER FOR 3572 SELECT NULL AS TOKEN;
 	
+	SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	
 	START TRANSACTION;
 	/* Acquire an exclusive lock on the master row.*/
 	SELECT LOCK_KEY INTO lockKeyExists FROM SEMAPHORE_MASTER WHERE LOCK_KEY = lockKey FOR UPDATE NOWAIT;
