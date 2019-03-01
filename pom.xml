@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.sagebionetworks</groupId>
 	<artifactId>database-semaphore</artifactId>
-	<version>1.0.8</version>
+	<version>1.2.0</version>
 	<packaging>jar</packaging>
 	<name>database-semaphore</name>
 	<description>Simple MySQL backed Semaphore</description>
@@ -92,7 +92,7 @@
 		<dependency>
 			<groupId>mysql</groupId>
 			<artifactId>mysql-connector-java</artifactId>
-			<version>5.1.35</version>
+			<version>8.0.11</version>
 			<scope>runtime</scope>
 		</dependency>
 		<dependency>
