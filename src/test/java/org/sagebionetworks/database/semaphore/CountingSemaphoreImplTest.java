@@ -169,9 +169,56 @@ public class CountingSemaphoreImplTest {
 				locksAcquired++;
 			}
 		}
-		assertTrue("At least one lock should have been acquired", locksAcquired >= 1);
+		assertEquals("24 of 25 threads should have been issued a lock", locksAcquired, maxLockCount);
 	}
 	
+	
+	/**
+	 * If two process attempt to get two separate locks at the same time the the
+	 * 'NOWAIT' condition should not trigger, and each process should receive a lock.
+	 * 
+	 * @throws Exception
+	 */
+	@Test
+	public void testConcurrentDifferentKeys() throws Exception{
+		int maxThreads = 25;
+		long lockTimeoutSec = 20;
+		int maxLocksPerThread = 1;
+		// create a different key for each thread.
+		List<String> keys = createUniqueKeys(maxThreads, maxLocksPerThread);
+		ExecutorService executorService =Executors.newFixedThreadPool(maxThreads);
+		List<Callable<Boolean>> runners = new LinkedList<Callable<Boolean>>();
+		for(String key: keys){
+			TestRunner runner = new TestRunner(semaphore, key, lockTimeoutSec, maxLocksPerThread);
+			runners.add(runner);
+		}
+		// run all runners
+		List<Future<Boolean>> futures = executorService.invokeAll(runners);
+		int locksAcquired = 0;
+		for(Future<Boolean> future: futures){
+			if(future.get()){
+				locksAcquired++;
+			}
+		}
+		assertTrue("Most threads should have received a lock", locksAcquired >= maxThreads-3);
+	}
+	
+	/**
+	 * Create n unique keys and ensure each key already exists in the database.
+	 * @param count
+	 * @return
+	 */
+	public List<String> createUniqueKeys(int count, int maxKeys){
+		List<String> keys = new LinkedList<String>();
+		for(int i=0; i<count; i++) {
+			String key = "i-"+i;
+			String token = semaphore.attemptToAcquireLock(key, 1000, maxKeys);
+			semaphore.releaseLock(key, token);
+			keys.add(key);
+		}
+		return keys;
+	}
+	 
 
 	private class TestRunner implements Callable<Boolean> {
 		CountingSemaphore semaphore;
@@ -193,12 +240,7 @@ public class CountingSemaphoreImplTest {
 
 		public Boolean call() throws Exception {
 			long start = System.currentTimeMillis();
-			String token = null;
-			int count = 0;
-			// try up to 10 times to get a lock.
-			while((token = semaphore.attemptToAcquireLock(key, lockTimeoutSec, maxLockCount)) == null && count < 10){
-				count++;
-			}
+			String token = semaphore.attemptToAcquireLock(key, lockTimeoutSec, maxLockCount);
 			log.info("AcquiredLock in "+(System.currentTimeMillis()-start)+" MS with token: "+token);
 			if(token != null){
 				try {

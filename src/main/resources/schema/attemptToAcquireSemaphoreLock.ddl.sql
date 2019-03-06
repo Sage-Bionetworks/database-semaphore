@@ -1,39 +1,33 @@
 CREATE PROCEDURE attemptToAcquireSemaphoreLock(IN lockKey VARCHAR(256), IN timeoutSec INT(4), IN maxLockCount INT(4))
+    MODIFIES SQL DATA
+    SQL SECURITY INVOKER
 BEGIN
-	DECLARE lockKeyExists VARCHAR(256);
-	DECLARE countOutstanding INT(4);
-	DECLARE newToken VARCHAR(256);
-	
-	/* ERROR CODE 3572 indicates NOWAIT for a lock was encountered.  For such cases null is returned. See: PLFM-5193 */
-	DECLARE EXIT HANDLER FOR 3572 SELECT NULL AS TOKEN;
+	DECLARE newToken VARCHAR(256) DEFAULT NULL;
+    DECLARE maxNumber TINYINT;
+	DECLARE rowId MEDIUMINT;
 	
 	SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+    
+    /* Ensure a row exists for each number up to the maxLockCount for the given key */ 
+    SELECT MAX(LOCK_NUM) INTO maxNumber FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey;
+    IF maxNumber IS NULL THEN
+		SET maxNumber = 0;
+	END IF;
+    WHILE maxNumber < maxLockCount DO
+		INSERT IGNORE INTO SEMAPHORE_LOCK (LOCK_KEY, LOCK_NUM, TOKEN, EXPIRES_ON) VALUES (lockKey, maxNumber, NULL, NULL);
+		SET maxNumber = maxNumber + 1;
+	END WHILE;
 	
 	START TRANSACTION;
-	/* Acquire an exclusive lock on the master row.*/
-	SELECT LOCK_KEY INTO lockKeyExists FROM SEMAPHORE_MASTER WHERE LOCK_KEY = lockKey FOR UPDATE NOWAIT;
-
-	/*	If the master does not exist then we need to create it in a new transaction */
-    IF lockKeyExists IS NULL THEN
-		/* To avoid deadlock the insert into master must be done in a separate transaction. */
-		COMMIT;
-		START TRANSACTION;
-		/* Create the lock key in the master table since it does not exist*/
-		INSERT IGNORE INTO SEMAPHORE_MASTER (LOCK_KEY) VALUES (lockKey);
-		COMMIT;
-		START TRANSACTION;
-		SELECT LOCK_KEY INTO lockKeyExists FROM SEMAPHORE_MASTER WHERE LOCK_KEY = lockKey FOR UPDATE NOWAIT;
-    END IF;
-	/* Delete expired locks*/
-	DELETE FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey AND EXPIRES_ON < current_timestamp;
-	/* Count outstanding locks*/ 
-	SELECT COUNT(*) INTO countOutstanding FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey;
+	/* Find the first number for the given lock that has a null token or is expired. */
+	SELECT ROW_ID INTO rowId FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey AND LOCK_NUM < maxLockCount
+		AND (TOKEN IS NULL OR EXPIRES_ON < current_timestamp) LIMIT 1 FOR UPDATE SKIP LOCKED;
 	
-	IF countOutstanding < maxLockCount THEN
+    /* Claim this number and issue a token */
+	IF rowId IS NOT NULL THEN
 		SET newToken = UUID();
-		INSERT INTO SEMAPHORE_LOCK (LOCK_KEY, TOKEN, EXPIRES_ON) VALUES (lockKey, newToken, (CURRENT_TIMESTAMP + INTERVAL timeoutSec SECOND));
-	ELSE
-		SET newToken = NULL;
+        UPDATE SEMAPHORE_LOCK SET TOKEN = newToken, EXPIRES_ON = (CURRENT_TIMESTAMP + INTERVAL timeoutSec SECOND)
+        	WHERE ROW_ID = rowId;
 	END IF;
 	COMMIT;
 	/* push the token to the result set*/

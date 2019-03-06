@@ -33,9 +33,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 public class CountingSemaphoreImpl implements CountingSemaphore {
 
-	private static final String CALL_REFRESH_SEMAPHORE_LOCK = "CALL refreshSemaphoreLock(?, ?, ?)";
+	private static final String CALL_REFRESH_SEMAPHORE_LOCK = "CALL refreshSemaphoreLock(?, ?)";
 
-	private static final String CALL_RELEASE_SEMAPHORE_LOCK = "CALL releaseSemaphoreLock(?, ?)";
+	private static final String CALL_RELEASE_SEMAPHORE_LOCK = "CALL releaseSemaphoreLock(?)";
 
 	private static final String CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK = "CALL attemptToAcquireSemaphoreLock(?, ?, ?)";
 
@@ -48,11 +48,10 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	private static final Logger log = LogManager
 			.getLogger(CountingSemaphoreImpl.class);
 
-	private static final String SQL_TRUNCATE_LOCKS = "TRUNCATE TABLE "
-			+ TABLE_SEMAPHORE_LOCK;
+	private static final String SQL_CLEAR_ALL_LOCKS = "UPDATE "+ TABLE_SEMAPHORE_LOCK+" SET TOKEN = NULL WHERE LOCK_KEY IS NOT NULL";
+	
 
 	private static final String SEMAPHORE_LOCK_DDL_SQL = "schema/SemaphoreLock.ddl.sql";
-	private static final String SEMAPHORE_MASTER_DDL_SQL = "schema/SemaphoreMaster.ddl.sql";
 	private static final String PROCEDURE_DDL_SQL_TEMPLATE = "schema/%s.ddl.sql";
 	private static final String PROCEDURE_EXITS_TEMPLATE = "PROCEDURE %s already exists";
 	
@@ -77,8 +76,6 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 		jdbcTemplate = new JdbcTemplate(dataSourcePool);
 
 		// Create the tables
-		this.jdbcTemplate.update(Utils
-				.loadStringFromClassPath(SEMAPHORE_MASTER_DDL_SQL));
 		this.jdbcTemplate.update(Utils
 				.loadStringFromClassPath(SEMAPHORE_LOCK_DDL_SQL));
 		createProcedureIfDoesNotExist(ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK);
@@ -148,7 +145,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			throw new IllegalArgumentException("Token cannot be null.");
 		}
 		int result = jdbcTemplate.queryForObject(CALL_RELEASE_SEMAPHORE_LOCK,
-				Integer.class, key, token);
+				Integer.class, token);
 		Utils.validateResults(key, token, result);
 
 	}
@@ -161,7 +158,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 * #releaseAllLocks()
 	 */
 	public void releaseAllLocks() {
-		jdbcTemplate.update(SQL_TRUNCATE_LOCKS);
+		jdbcTemplate.update(SQL_CLEAR_ALL_LOCKS);
 	}
 
 	/*
@@ -184,7 +181,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 					"TimeoutSec cannot be less then one.");
 		}
 		int result = jdbcTemplate.queryForObject(CALL_REFRESH_SEMAPHORE_LOCK,
-				Integer.class, key, token, timeoutSec);
+				Integer.class, token, timeoutSec);
 		Utils.validateResults(key, token, result);
 	}
 

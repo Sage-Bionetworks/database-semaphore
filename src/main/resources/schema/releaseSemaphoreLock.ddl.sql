@@ -1,19 +1,10 @@
-CREATE PROCEDURE releaseSemaphoreLock(IN lockKey VARCHAR(256), IN tokenIn VARCHAR(256))
+CREATE PROCEDURE releaseSemaphoreLock(IN tokenIn VARCHAR(256))
+    MODIFIES SQL DATA
+    SQL SECURITY INVOKER
 BEGIN
-	DECLARE lockKeyExists VARCHAR(256);
 	SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	START TRANSACTION;
-	/* acquire an exclusive lock on the master row.*/
-	SELECT LOCK_KEY INTO lockKeyExists FROM SEMAPHORE_MASTER WHERE LOCK_KEY = lockKey FOR UPDATE;
-
-	/*	If the master does not exist then we need to create it in a new transaction */
-    IF lockKeyExists IS NULL THEN
-		/* Master lock does not exist */
-		SELECT -1 AS RESULT;
-	ELSE
-		DELETE FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey AND TOKEN = tokenIn;
-		/*Count the rows affected by the delete*/
-		SELECT ROW_COUNT() AS RESULT;
-    END IF;
+	UPDATE SEMAPHORE_LOCK SET TOKEN = NULL, EXPIRES_ON = NULL WHERE TOKEN = tokenIn;
+	SELECT ROW_COUNT() AS RESULT;
 	COMMIT;
-END;
+END
