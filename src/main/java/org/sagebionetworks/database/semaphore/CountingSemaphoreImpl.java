@@ -48,8 +48,8 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	private static final Logger log = LogManager
 			.getLogger(CountingSemaphoreImpl.class);
 
-	private static final String SQL_TRUNCATE_LOCKS = "TRUNCATE TABLE "
-			+ TABLE_SEMAPHORE_LOCK;
+	private static final String SQL_CLEAR_ALL_LOCKS = "UPDATE "+ TABLE_SEMAPHORE_LOCK+" SET TOKEN = NULL WHERE LOCK_KEY IS NOT NULL";
+	
 
 	private static final String SEMAPHORE_LOCK_DDL_SQL = "schema/SemaphoreLock.ddl.sql";
 	private static final String PROCEDURE_DDL_SQL_TEMPLATE = "schema/%s.ddl.sql";
@@ -158,7 +158,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 * #releaseAllLocks()
 	 */
 	public void releaseAllLocks() {
-		jdbcTemplate.update(SQL_TRUNCATE_LOCKS);
+		jdbcTemplate.update(SQL_CLEAR_ALL_LOCKS);
 	}
 
 	/*

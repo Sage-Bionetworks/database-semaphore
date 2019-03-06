@@ -4,7 +4,7 @@ CREATE PROCEDURE attemptToAcquireSemaphoreLock(IN lockKey VARCHAR(256), IN timeo
 BEGIN
 	DECLARE newToken VARCHAR(256) DEFAULT NULL;
     DECLARE maxNumber TINYINT;
-	DECLARE freeNumber TINYINT;
+	DECLARE rowId MEDIUMINT;
 	
 	SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
     
@@ -20,14 +20,14 @@ BEGIN
 	
 	START TRANSACTION;
 	/* Find the first number for the given lock that has a null token or is expired. */
-	SELECT LOCK_NUM INTO freeNumber FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey AND LOCK_NUM < maxLockCount
+	SELECT ROW_ID INTO rowId FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey AND LOCK_NUM < maxLockCount
 		AND (TOKEN IS NULL OR EXPIRES_ON < current_timestamp) LIMIT 1 FOR UPDATE SKIP LOCKED;
 	
     /* Claim this number and issue a token */
-	IF freeNumber IS NOT NULL THEN
+	IF rowId IS NOT NULL THEN
 		SET newToken = UUID();
         UPDATE SEMAPHORE_LOCK SET TOKEN = newToken, EXPIRES_ON = (CURRENT_TIMESTAMP + INTERVAL timeoutSec SECOND)
-        	WHERE LOCK_KEY = lockKey AND LOCK_NUM = freeNumber;
+        	WHERE ROW_ID = rowId;
 	END IF;
 	COMMIT;
 	/* push the token to the result set*/
