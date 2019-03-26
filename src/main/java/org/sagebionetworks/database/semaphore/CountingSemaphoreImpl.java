@@ -1,5 +1,8 @@
 package org.sagebionetworks.database.semaphore;
 
+import static org.sagebionetworks.database.semaphore.Sql.COL_TABLE_SEM_LOCK_EXPIRES_ON;
+import static org.sagebionetworks.database.semaphore.Sql.COL_TABLE_SEM_LOCK_LOCK_KEY;
+import static org.sagebionetworks.database.semaphore.Sql.COL_TABLE_SEM_LOCK_TOKEN;
 import static org.sagebionetworks.database.semaphore.Sql.TABLE_SEMAPHORE_LOCK;
 
 import javax.sql.DataSource;
@@ -49,6 +52,15 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			.getLogger(CountingSemaphoreImpl.class);
 
 	private static final String SQL_CLEAR_ALL_LOCKS = "UPDATE "+ TABLE_SEMAPHORE_LOCK+" SET TOKEN = NULL WHERE LOCK_KEY IS NOT NULL";
+
+	private static final String SQL_EXISTS_UNEXPIRED_LOCK =
+			"SELECT EXISTS (" +
+			"SELECT *" +
+			" FROM " + TABLE_SEMAPHORE_LOCK +
+			" WHERE " + COL_TABLE_SEM_LOCK_LOCK_KEY + " = ?" +
+			" AND " + COL_TABLE_SEM_LOCK_TOKEN + " IS NOT NULL " +
+			" AND " + COL_TABLE_SEM_LOCK_EXPIRES_ON + " >= CURRENT_TIMESTAMP" +
+			")";
 	
 
 	private static final String SEMAPHORE_LOCK_DDL_SQL = "schema/SemaphoreLock.ddl.sql";
@@ -183,6 +195,11 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 		int result = jdbcTemplate.queryForObject(CALL_REFRESH_SEMAPHORE_LOCK,
 				Integer.class, token, timeoutSec);
 		Utils.validateResults(key, token, result);
+	}
+
+	@Override
+	public boolean existsUnexpiredLock(final String key){
+		return jdbcTemplate.queryForObject(SQL_EXISTS_UNEXPIRED_LOCK, Boolean.class, key);
 	}
 
 }
