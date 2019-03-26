@@ -2,6 +2,15 @@ package org.sagebionetworks.database.semaphore;
 
 import static org.junit.Assert.*;
 
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -44,7 +53,7 @@ public class WriteReadSemaphoreImplTest {
 	@After
 	public void after(){
 		// release all locks
-		writeReadsemaphore.releaseAllLocks();
+//		writeReadsemaphore.releaseAllLocks();
 	}
 	
 	@Test
@@ -309,7 +318,41 @@ public class WriteReadSemaphoreImplTest {
 	}
 	
 	/**
-	 * Helper to validate read locks cannot be aquired for the given keys.
+	 * The test produces deadlock on staging but not locally.
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
+	 * 
+	 */
+	@Test
+	public void testPLFM_5451MultipleThreadAquireSameLockWithWriteWriteKey() throws InterruptedException, ExecutionException {
+		int maxThreads = 200;
+		final String readKey = "TALBE-LOCK-18071441";
+		lockTimeoutSec = 10;
+		final String writeKey = "writeKey";
+		String precursor = writeReadsemaphore.acquireWriteLockPrecursor(writeKey, lockTimeoutSec);
+		final String writeLockKey = writeReadsemaphore.acquireWriteLock(writeKey, precursor, lockTimeoutSec);
+		System.out.println("Write lock: "+writeLockKey);
+		ExecutorService executorService =Executors.newFixedThreadPool(maxThreads);
+		List<Future<String>> futures= new LinkedList<Future<String>>();
+		for(int i=0; i<maxThreads; i++) {
+			futures.add(executorService.submit(new Callable<String>() {
+
+				@Override
+				public String call() throws Exception {
+					writeReadsemaphore.refreshWriteLock(writeKey, writeLockKey, lockTimeoutSec);
+					return writeReadsemaphore.acquireReadLock(readKey, lockTimeoutSec);
+				}
+			}));
+		}
+		// wait for them to finish
+		for(Future<String> future: futures) {
+			String key = future.get();
+			System.out.println(key);
+		}
+	}
+	
+	/**
+	 * Helper to validate read locks cannot be acquired for the given keys.
 	 * @param timoutSec
 	 * @param keys
 	 */
