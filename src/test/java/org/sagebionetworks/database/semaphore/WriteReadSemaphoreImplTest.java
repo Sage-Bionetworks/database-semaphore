@@ -53,7 +53,7 @@ public class WriteReadSemaphoreImplTest {
 	@After
 	public void after(){
 		// release all locks
-		writeReadsemaphore.releaseAllLocks();
+//		writeReadsemaphore.releaseAllLocks();
 	}
 	
 	@Test
@@ -318,101 +318,6 @@ public class WriteReadSemaphoreImplTest {
 	}
 	
 	/**
-	 * @throws ExecutionException 
-	 * @throws InterruptedException 
-	 * 
-	 */
-	@Test
-	public void testPLFM_5451MultipleThreadAquireSameLock() throws InterruptedException, ExecutionException {
-		int maxThreads = 50;
-		final String lockKey = "TALBE-LOCK-18071440";
-		lockTimeoutSec = 10;
-		ExecutorService executorService =Executors.newFixedThreadPool(maxThreads);
-		List<Future<String>> futures= new LinkedList<Future<String>>();
-		for(int i=0; i<maxThreads; i++) {
-			futures.add(executorService.submit(new Callable<String>() {
-
-				@Override
-				public String call() throws Exception {
-					String token = writeReadsemaphore.acquireReadLock(lockKey, lockTimeoutSec);
-					writeReadsemaphore.refreshReadLock(lockKey, token, lockTimeoutSec);
-					writeReadsemaphore.refreshReadLock(lockKey, token, lockTimeoutSec);
-					writeReadsemaphore.refreshReadLock(lockKey, token, lockTimeoutSec);
-					writeReadsemaphore.refreshReadLock(lockKey, token, lockTimeoutSec);
-					writeReadsemaphore.refreshReadLock(lockKey, token, lockTimeoutSec);
-					return token;
-				}
-			}));
-		}
-		// wait for them to finish
-		for(Future<String> future: futures) {
-			String key = future.get();
-			System.out.println(key);
-		}
-	}
-	
-	@Test
-	public void testPLFM_5451MultipleThreadAquireSameLockMulitpleTimes() throws InterruptedException, ExecutionException {
-		int maxThreads = 50;
-		final String lockKey = "TALBE-LOCK-18071440";
-		lockTimeoutSec = 10;
-		ExecutorService executorService =Executors.newFixedThreadPool(maxThreads);
-		List<Future<String>> futures= new LinkedList<Future<String>>();
-		final Random random = new Random(123L);
-		for(int i=0; i<maxThreads; i++) {
-			futures.add(executorService.submit(new Callable<String>() {
-
-				@Override
-				public String call() throws Exception {
-					for(int j=0; j<5; j++) {
-						int value = random.nextInt(5);
-						writeReadsemaphore.acquireReadLock(lockKey+value, lockTimeoutSec);
-					}
-					return writeReadsemaphore.acquireReadLock(lockKey, lockTimeoutSec);
-				}
-			}));
-		}
-		// wait for them to finish
-		for(Future<String> future: futures) {
-			String key = future.get();
-			System.out.println(key);
-		}
-	}
-	
-	/**
-	 * The test produces deadlock on staging but not locally.
-	 * @throws ExecutionException 
-	 * @throws InterruptedException 
-	 * 
-	 */
-	@Test
-	public void testPLFM_5451MultipleThreadAquireSameLockWithWrite() throws InterruptedException, ExecutionException {
-		int maxThreads = 100;
-		final String lockKey = "TALBE-LOCK-18071440";
-		lockTimeoutSec = 10;
-		String precursor = writeReadsemaphore.acquireWriteLockPrecursor(lockKey, lockTimeoutSec);
-		final String writeLockKey = writeReadsemaphore.acquireWriteLock(lockKey, precursor, lockTimeoutSec);
-		System.out.println("Write lock: "+writeLockKey);
-		ExecutorService executorService =Executors.newFixedThreadPool(maxThreads);
-		List<Future<String>> futures= new LinkedList<Future<String>>();
-		for(int i=0; i<maxThreads; i++) {
-			futures.add(executorService.submit(new Callable<String>() {
-
-				@Override
-				public String call() throws Exception {
-					writeReadsemaphore.refreshWriteLock(lockKey, writeLockKey, lockTimeoutSec);
-					return writeReadsemaphore.acquireReadLock(lockKey, lockTimeoutSec);
-				}
-			}));
-		}
-		// wait for them to finish
-		for(Future<String> future: futures) {
-			String key = future.get();
-			System.out.println(key);
-		}
-	}
-	
-	/**
 	 * The test produces deadlock on staging but not locally.
 	 * @throws ExecutionException 
 	 * @throws InterruptedException 
@@ -420,8 +325,8 @@ public class WriteReadSemaphoreImplTest {
 	 */
 	@Test
 	public void testPLFM_5451MultipleThreadAquireSameLockWithWriteWriteKey() throws InterruptedException, ExecutionException {
-		int maxThreads = 100;
-		final String lockKey = "TALBE-LOCK-18071440";
+		int maxThreads = 200;
+		final String readKey = "TALBE-LOCK-18071441";
 		lockTimeoutSec = 10;
 		final String writeKey = "writeKey";
 		String precursor = writeReadsemaphore.acquireWriteLockPrecursor(writeKey, lockTimeoutSec);
@@ -435,127 +340,7 @@ public class WriteReadSemaphoreImplTest {
 				@Override
 				public String call() throws Exception {
 					writeReadsemaphore.refreshWriteLock(writeKey, writeLockKey, lockTimeoutSec);
-					return writeReadsemaphore.acquireReadLock(lockKey, lockTimeoutSec);
-				}
-			}));
-		}
-		// wait for them to finish
-		for(Future<String> future: futures) {
-			String key = future.get();
-			System.out.println(key);
-		}
-	}
-	
-	@Test
-	public void testPLFM_5451MultipleThreadAquireSameLockPrecursorOnly() throws InterruptedException, ExecutionException {
-		int maxThreads = 50;
-		final String lockKey = "TALBE-LOCK-18071440";
-		lockTimeoutSec = 10;
-		String precursor = writeReadsemaphore.acquireWriteLockPrecursor(lockKey, lockTimeoutSec);
-//		String writeLockKey = writeReadsemaphore.acquireWriteLock(lockKey, precursor, lockTimeoutSec);
-		System.out.println("Precursor lock: "+precursor);
-		ExecutorService executorService =Executors.newFixedThreadPool(maxThreads);
-		List<Future<String>> futures= new LinkedList<Future<String>>();
-		for(int i=0; i<maxThreads; i++) {
-			futures.add(executorService.submit(new Callable<String>() {
-
-				@Override
-				public String call() throws Exception {
-					return writeReadsemaphore.acquireReadLock(lockKey, lockTimeoutSec);
-				}
-			}));
-		}
-		// wait for them to finish
-		for(Future<String> future: futures) {
-			String key = future.get();
-			System.out.println(key);
-		}
-	}
-	
-	@Test
-	public void testPLFM_5451MultipleThreadAquireDifferentLock() throws InterruptedException, ExecutionException {
-		int maxThreads = 50;
-		final String lockKey = "TALBE-LOCK-18071440";
-		lockTimeoutSec = 10;
-		ExecutorService executorService =Executors.newFixedThreadPool(maxThreads);
-		List<Future<String>> futures= new LinkedList<Future<String>>();
-		for(int i=0; i<maxThreads; i++) {
-			final String thisKey = lockKey+i;
-			futures.add(executorService.submit(new Callable<String>() {
-
-				@Override
-				public String call() throws Exception {
-					return writeReadsemaphore.acquireReadLock(thisKey, lockTimeoutSec);
-				}
-			}));
-		}
-		// wait for them to finish
-		for(Future<String> future: futures) {
-			String key = future.get();
-			System.out.println(key);
-		}
-	}
-	
-	/**
-	 * @throws ExecutionException 
-	 * @throws InterruptedException 
-	 * 
-	 */
-	@Test
-	public void testPLFM_5451MultipleThreadAquireWriteLocks() throws InterruptedException, ExecutionException {
-		int maxThreads = 50;
-		final String lockKey = "TALBE-LOCK-18071440";
-		lockTimeoutSec = 10;
-		ExecutorService executorService =Executors.newFixedThreadPool(maxThreads);
-		List<Future<String>> futures= new LinkedList<Future<String>>();
-		for(int i=0; i<maxThreads; i++) {
-			futures.add(executorService.submit(new Callable<String>() {
-
-				@Override
-				public String call() throws Exception {
-					String precursor = writeReadsemaphore.acquireWriteLockPrecursor(lockKey, lockTimeoutSec);
-					if(precursor != null) {
-						return writeReadsemaphore.acquireWriteLock(lockKey, precursor, lockTimeoutSec);
-					}else {
-						return null;
-					}
-					
-				}
-			}));
-		}
-		// wait for them to finish
-		for(Future<String> future: futures) {
-			String key = future.get();
-			System.out.println(key);
-		}
-	}
-	
-	@Test
-	public void testPLFM_5451MultipleThreadAllOpperations() throws InterruptedException, ExecutionException {
-		int maxThreads = 50;
-		final String lockKey = "TALBE-LOCK-18071440";
-		lockTimeoutSec = 10;
-		ExecutorService executorService =Executors.newFixedThreadPool(maxThreads);
-		List<Future<String>> futures= new LinkedList<Future<String>>();
-		for(int i=0; i<maxThreads; i++) {
-			futures.add(executorService.submit(new Callable<String>() {
-
-				@Override
-				public String call() throws Exception {
-
-					String readLock = writeReadsemaphore.acquireReadLock(lockKey, lockTimeoutSec);
-					String writeLock = null;
-					// Get a precursor locks
-					String precursor = writeReadsemaphore.acquireWriteLockPrecursor(lockKey, lockTimeoutSec);
-					if(precursor != null) {
-						
-						int count = 0;
-						while((writeLock = writeReadsemaphore.acquireWriteLock(lockKey, precursor, lockTimeoutSec)) == null && count < 1000) {
-							Thread.yield();
-							count++;
-						}
-					}
-					return writeLock;
+					return writeReadsemaphore.acquireReadLock(readKey, lockTimeoutSec);
 				}
 			}));
 		}
