@@ -1,15 +1,22 @@
 package org.sagebionetworks.database.semaphore;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -163,12 +170,7 @@ public class CountingSemaphoreImplTest {
 		}
 		// run all runners
 		List<Future<Boolean>> futures = executorService.invokeAll(runners);
-		int locksAcquired = 0;
-		for(Future<Boolean> future: futures){
-			if(future.get()){
-				locksAcquired++;
-			}
-		}
+		int locksAcquired = countLocksAcquired(futures);
 		assertEquals("24 of 25 threads should have been issued a lock", locksAcquired, maxLockCount);
 	}
 	
@@ -194,15 +196,70 @@ public class CountingSemaphoreImplTest {
 		}
 		// run all runners
 		List<Future<Boolean>> futures = executorService.invokeAll(runners);
+		int locksAcquired = countLocksAcquired(futures);
+		assertTrue("Most threads should have received a lock", locksAcquired >= maxThreads-3);
+	}
+
+	private int countLocksAcquired(List<Future<Boolean>> futures) throws InterruptedException, java.util.concurrent.ExecutionException {
 		int locksAcquired = 0;
-		for(Future<Boolean> future: futures){
-			if(future.get()){
+		for (Future<Boolean> future : futures) {
+			if (future.get()) {
 				locksAcquired++;
 			}
 		}
-		assertTrue("Most threads should have received a lock", locksAcquired >= maxThreads-3);
+		return locksAcquired;
 	}
-	
+
+
+	private void holdLocksOfSameKeyWithTimeouts(String lockKey, List<Long> lockTimeouts) throws InterruptedException, java.util.concurrent.ExecutionException {
+		int locksAcquired = 0;
+		for(long timeoutSec : lockTimeouts){
+			String token = semaphore.attemptToAcquireLock(lockKey, timeoutSec, lockTimeouts.size());
+			if(token != null && !token.isEmpty()){
+				locksAcquired++;
+			}
+		}
+
+		assertEquals(lockTimeouts.size(), locksAcquired);
+	}
+
+	@Test
+	public void testExistsUnexpiredLock_notExist() throws Exception {
+		//set up unexpired locks held by other threads with a different key;
+		String unrelatedLockKey = "unrelatedLock";
+		List<Long> lockTimeouts = Collections.nCopies(5, 50L); // 5 locks w/ expiration of 50 seconds each
+		holdLocksOfSameKeyWithTimeouts(unrelatedLockKey, lockTimeouts);
+
+		//method under test
+		assertFalse(semaphore.existsUnexpiredLock("otherKey"));
+	}
+
+	@Test
+	public void testExistsUnexpiredLock_existButAllExpired() throws ExecutionException, InterruptedException {
+		//set up locks that will expire
+		String lockKey = "sameKey";
+		List<Long> lockTimeouts = Collections.nCopies(5, 1L); // 5 locks w/ expiration of 1 second each
+		holdLocksOfSameKeyWithTimeouts(lockKey, lockTimeouts);
+		Thread.sleep(2000);
+
+		//method under test
+		assertFalse(semaphore.existsUnexpiredLock(lockKey));
+
+	}
+
+	@Test
+	public void mtestExistsUnexpiredLock_existAndSomeUnexpired() throws ExecutionException, InterruptedException {
+		//set up locks that will expire
+		String lockKey = "sameKey";
+		List<Long> lockTimeouts = Arrays.asList(1L, 1L, 600L, 1L, 1L);
+		holdLocksOfSameKeyWithTimeouts(lockKey, lockTimeouts);
+		Thread.sleep(1000);
+
+		//method under test
+		assertTrue(semaphore.existsUnexpiredLock(lockKey));
+	}
+
+
 	/**
 	 * Create n unique keys and ensure each key already exists in the database.
 	 * @param count

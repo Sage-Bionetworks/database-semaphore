@@ -68,4 +68,10 @@ public interface CountingSemaphore {
 	 */
 	public void releaseAllLocks();
 
+	/**
+	 *
+	 * @param key key of the lock
+	 * @return true if an unexpired lock assigned to the key exists. false otherwise.
+	 */
+	boolean existsUnexpiredLock(String key);
 }
