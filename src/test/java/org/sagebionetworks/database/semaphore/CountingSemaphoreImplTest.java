@@ -212,19 +212,13 @@ public class CountingSemaphoreImplTest {
 
 
 	private void holdLocksOfSameKeyWithTimeouts(String lockKey, List<Long> lockTimeouts) throws InterruptedException, java.util.concurrent.ExecutionException {
-		ExecutorService executorService = Executors.newFixedThreadPool(lockTimeouts.size());
-		List<Callable<Boolean>> testRunners = new ArrayList<>(lockTimeouts.size());
+		int locksAcquired = 0;
 		for(long timeoutSec : lockTimeouts){
-			testRunners.add(new Callable<Boolean>() {
-				@Override
-				public Boolean call() throws Exception {
-					String token = semaphore.attemptToAcquireLock(lockKey, timeoutSec, lockTimeouts.size());
-					return token != null && !token.isEmpty();
-				}
-			});
+			String token = semaphore.attemptToAcquireLock(lockKey, timeoutSec, lockTimeouts.size());
+			if(token != null && !token.isEmpty()){
+				locksAcquired++;
+			}
 		}
-		List<Future<Boolean>> futures = executorService.invokeAll(testRunners);
-		int locksAcquired = countLocksAcquired(futures);
 
 		assertEquals(lockTimeouts.size(), locksAcquired);
 	}
@@ -233,7 +227,7 @@ public class CountingSemaphoreImplTest {
 	public void testExistsUnexpiredLock_notExist() throws Exception {
 		//set up unexpired locks held by other threads with a different key;
 		String unrelatedLockKey = "unrelatedLock";
-		List<Long> lockTimeouts = Collections.nCopies(5, 50L);
+		List<Long> lockTimeouts = Collections.nCopies(5, 50L); // 5 locks w/ expiration of 50 seconds each
 		holdLocksOfSameKeyWithTimeouts(unrelatedLockKey, lockTimeouts);
 
 		//method under test
@@ -244,9 +238,9 @@ public class CountingSemaphoreImplTest {
 	public void testExistsUnexpiredLock_existButAllExpired() throws ExecutionException, InterruptedException {
 		//set up locks that will expire
 		String lockKey = "sameKey";
-		List<Long> lockTimeouts = Collections.nCopies(5, 1L);
+		List<Long> lockTimeouts = Collections.nCopies(5, 1L); // 5 locks w/ expiration of 1 second each
 		holdLocksOfSameKeyWithTimeouts(lockKey, lockTimeouts);
-		Thread.sleep(2000);
+		Thread.sleep(1500);
 
 		//method under test
 		assertFalse(semaphore.existsUnexpiredLock(lockKey));
