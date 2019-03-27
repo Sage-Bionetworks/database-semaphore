@@ -240,7 +240,7 @@ public class CountingSemaphoreImplTest {
 		String lockKey = "sameKey";
 		List<Long> lockTimeouts = Collections.nCopies(5, 1L); // 5 locks w/ expiration of 1 second each
 		holdLocksOfSameKeyWithTimeouts(lockKey, lockTimeouts);
-		Thread.sleep(1500);
+		Thread.sleep(2000);
 
 		//method under test
 		assertFalse(semaphore.existsUnexpiredLock(lockKey));
