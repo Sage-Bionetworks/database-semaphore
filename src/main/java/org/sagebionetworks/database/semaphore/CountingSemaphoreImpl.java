@@ -36,6 +36,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 public class CountingSemaphoreImpl implements CountingSemaphore {
 
+	private static final String COUN_LOCK_ROWS = "SELECT COUNT(*) FROM SEMAPHORE_LOCK";
+
+	private static final String GARBAGE_COLLECTION = "DELETE FROM SEMAPHORE_LOCK WHERE"
+			+ " TOKEN IS NULL AND (now() > EXPIRES_ON || EXPIRES_ON IS NULL)";
+
 	private static final String CALL_REFRESH_SEMAPHORE_LOCK = "CALL refreshSemaphoreLock(?, ?)";
 
 	private static final String CALL_RELEASE_SEMAPHORE_LOCK = "CALL releaseSemaphoreLock(?)";
@@ -51,7 +56,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	private static final Logger log = LogManager
 			.getLogger(CountingSemaphoreImpl.class);
 
-	private static final String SQL_CLEAR_ALL_LOCKS = "UPDATE "+ TABLE_SEMAPHORE_LOCK+" SET TOKEN = NULL WHERE LOCK_KEY IS NOT NULL";
+	private static final String SQL_CLEAR_ALL_LOCKS = "UPDATE "+ TABLE_SEMAPHORE_LOCK+" SET TOKEN = NULL, EXPIRES_ON = NULL WHERE LOCK_KEY IS NOT NULL";
 
 	private static final String SQL_EXISTS_UNEXPIRED_LOCK =
 			"SELECT EXISTS (" +
@@ -200,6 +205,16 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	@Override
 	public boolean existsUnexpiredLock(final String key){
 		return jdbcTemplate.queryForObject(SQL_EXISTS_UNEXPIRED_LOCK, Boolean.class, key);
+	}
+
+	@Override
+	public void runGarbageCollection() {
+		jdbcTemplate.update(GARBAGE_COLLECTION);
+	}
+
+	@Override
+	public long getLockRowCount() {
+		return jdbcTemplate.queryForObject(COUN_LOCK_ROWS, Long.class) ;
 	}
 
 }
