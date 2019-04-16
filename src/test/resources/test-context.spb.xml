@@ -33,9 +33,4 @@
 		<constructor-arg ref="dataSourcePool"></constructor-arg>
 	</bean>
 	
-	<bean id="writeReadsemaphore"
-		class="org.sagebionetworks.database.semaphore.WriteReadSemaphoreImpl">
-		<constructor-arg ref="dataSourcePool"></constructor-arg>
-		<constructor-arg ref="transactionManager"></constructor-arg>
-	</bean>
 </beans>
