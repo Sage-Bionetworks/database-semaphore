@@ -36,7 +36,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 public class CountingSemaphoreImpl implements CountingSemaphore {
 
-	private static final String COUN_LOCK_ROWS = "SELECT COUNT(*) FROM SEMAPHORE_LOCK";
+	private static final String COUNT_LOCK_ROWS = "SELECT COUNT(*) FROM SEMAPHORE_LOCK";
 
 	private static final String GARBAGE_COLLECTION = "DELETE FROM SEMAPHORE_LOCK WHERE"
 			+ " TOKEN IS NULL AND (now() > EXPIRES_ON || EXPIRES_ON IS NULL)";
@@ -214,7 +214,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 
 	@Override
 	public long getLockRowCount() {
-		return jdbcTemplate.queryForObject(COUN_LOCK_ROWS, Long.class) ;
+		return jdbcTemplate.queryForObject(COUNT_LOCK_ROWS, Long.class) ;
 	}
 
 }
