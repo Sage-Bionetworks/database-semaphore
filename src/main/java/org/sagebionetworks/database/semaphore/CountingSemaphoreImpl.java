@@ -52,6 +52,8 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	private static final String RELEASE_SEMAPHORE_LOCK = "releaseSemaphoreLock";
 
 	private static final String ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK = "attemptToAcquireSemaphoreLock";
+	
+	private static final String BOOTSTRAP_LOCK = "bootstrapLockKeyRows";
 
 	private static final Logger log = LogManager
 			.getLogger(CountingSemaphoreImpl.class);
@@ -95,6 +97,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 		// Create the tables
 		this.jdbcTemplate.update(Utils
 				.loadStringFromClassPath(SEMAPHORE_LOCK_DDL_SQL));
+		createProcedureIfDoesNotExist(BOOTSTRAP_LOCK);
 		createProcedureIfDoesNotExist(ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK);
 		createProcedureIfDoesNotExist(RELEASE_SEMAPHORE_LOCK);
 		createProcedureIfDoesNotExist(REFRESH_SEMAPHORE_LOCK);

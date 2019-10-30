@@ -3,22 +3,12 @@ CREATE PROCEDURE attemptToAcquireSemaphoreLock(IN lockKey VARCHAR(256), IN timeo
     SQL SECURITY INVOKER
 BEGIN
 	DECLARE newToken VARCHAR(256) DEFAULT NULL;
-    DECLARE nextNumber TINYINT;
 	DECLARE rowId MEDIUMINT;
 	
 	SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
     
-    /* Ensure a row exists for each number up to the maxLockCount for the given key */ 
-    SELECT MAX(LOCK_NUM) INTO nextNumber FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey;
-    IF nextNumber IS NULL THEN
-		SET nextNumber = 0;
-	ELSE
-		SET nextNumber = nextNumber + 1;
-	END IF;
-    WHILE nextNumber < maxLockCount DO
-		INSERT IGNORE INTO SEMAPHORE_LOCK (LOCK_KEY, LOCK_NUM, TOKEN, EXPIRES_ON) VALUES (lockKey, nextNumber, NULL, NULL);
-		SET nextNumber = nextNumber + 1;
-	END WHILE;
+    /* Ensure the lock rows exist for this key */
+    CALL bootstrapLockKeyRows(lockKey, maxLockCount);
 	
 	START TRANSACTION;
 	/* Find the first number for the given lock that has a null token or is expired. */
