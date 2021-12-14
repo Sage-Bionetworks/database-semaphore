@@ -7,6 +7,31 @@
 	<packaging>jar</packaging>
 	<name>database-semaphore</name>
 	<description>Simple MySQL backed Semaphore</description>
+	<pluginRepositories>
+		<pluginRepository>
+			<id>sagebionetworks-libs-releases-local</id>
+			<url>https://sagebionetworks.jfrog.io/sagebionetworks/libs-releases-local/
+			</url>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+		</pluginRepository>
+	    <pluginRepository>
+	        <id>central</id>
+	        <name>Central Repository</name>
+	        <url>https://repo.maven.apache.org/maven2</url>
+	        <layout>default</layout>
+	        <snapshots>
+	            <enabled>false</enabled>
+	        </snapshots>
+	        <releases>
+	            <updatePolicy>never</updatePolicy>
+	        </releases>
+	    </pluginRepository>
+	</pluginRepositories>
 	<repositories>
 		<repository>
 			<id>sagebionetworks-releases-local</id>
