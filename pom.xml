@@ -1,16 +1,18 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.sagebionetworks</groupId>
 	<artifactId>database-semaphore</artifactId>
-	<version>3.0.6</version>
+	<version>4.0.0</version>
 	<packaging>jar</packaging>
 	<name>database-semaphore</name>
 	<description>Simple MySQL backed Semaphore</description>
 	<pluginRepositories>
 		<pluginRepository>
 			<id>sagebionetworks-libs-releases-local</id>
-			<url>https://sagebionetworks.jfrog.io/sagebionetworks/libs-releases-local/
+			<url>
+				https://sagebionetworks.jfrog.io/sagebionetworks/libs-releases-local/
 			</url>
 			<snapshots>
 				<enabled>true</enabled>
@@ -19,30 +21,32 @@
 				<enabled>true</enabled>
 			</releases>
 		</pluginRepository>
-	    <pluginRepository>
-	        <id>central</id>
-	        <name>Central Repository</name>
-	        <url>https://repo.maven.apache.org/maven2</url>
-	        <layout>default</layout>
-	        <snapshots>
-	            <enabled>false</enabled>
-	        </snapshots>
-	        <releases>
-	            <updatePolicy>never</updatePolicy>
-	        </releases>
-	    </pluginRepository>
+		<pluginRepository>
+			<id>central</id>
+			<name>Central Repository</name>
+			<url>https://repo.maven.apache.org/maven2</url>
+			<layout>default</layout>
+			<snapshots>
+				<enabled>false</enabled>
+			</snapshots>
+			<releases>
+				<updatePolicy>never</updatePolicy>
+			</releases>
+		</pluginRepository>
 	</pluginRepositories>
 	<repositories>
 		<repository>
 			<id>sagebionetworks-releases-local</id>
 			<name>sagebionetworks-releases-local</name>
-			<url>https://sagebionetworks.jfrog.io/sagebionetworks/libs-releases-local
+			<url>
+				https://sagebionetworks.jfrog.io/sagebionetworks/libs-releases-local
 			</url>
 		</repository>
 		<repository>
 			<id>sagebionetworks-ext</id>
 			<name>sagebionetworks-releases-ext</name>
-			<url>https://sagebionetworks.jfrog.io/sagebionetworks/ext-releases-local
+			<url>
+				https://sagebionetworks.jfrog.io/sagebionetworks/ext-releases-local
 			</url>
 		</repository>
 		<repository>
@@ -117,7 +121,7 @@
 		<dependency>
 			<groupId>mysql</groupId>
 			<artifactId>mysql-connector-java</artifactId>
-			<version>8.0.28</version>
+			<version>8.0.30</version>
 			<scope>runtime</scope>
 		</dependency>
 		<dependency>
@@ -127,20 +131,56 @@
 		</dependency>
 		<!-- testing -->
 		<dependency>
-			<groupId>org.mockito</groupId>
-			<artifactId>mockito-all</artifactId>
-			<version>1.8.5</version>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-dbcp2</artifactId>
+			<version>2.9.0</version>
+		</dependency>
+		<!--interface between junit5 and programmatic clients, such as IDEs and 
+				build tools, for running tests -->
+		<dependency>
+			<groupId>org.junit.platform</groupId>
+			<artifactId>junit-platform-launcher</artifactId>
+			<version>${junit.platform.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<!--adds a subset of junit5 functionality to tests currently running under 
+				junit4. should be REMOVED once fully converted to junit5 -->
+		<dependency>
+			<groupId>org.junit.platform</groupId>
+			<artifactId>junit-platform-runner</artifactId>
+			<version>${junit.platform.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<!--junit5 engine -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-engine</artifactId>
+			<version>${junit.jupiter.version}</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-dbcp2</artifactId>
-			<version>2.1</version>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-api</artifactId>
+			<version>${junit.jupiter.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<!--junit4 engine for backwards compatibility -->
+		<dependency>
+			<groupId>org.junit.vintage</groupId>
+			<artifactId>junit-vintage-engine</artifactId>
+			<version>${junit.vintage.version}</version>
+			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.13.2</version>
+			<groupId>org.mockito</groupId>
+			<artifactId>mockito-core</artifactId>
+			<version>${mockito.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.mockito</groupId>
+			<artifactId>mockito-junit-jupiter</artifactId>
+			<version>${mockito.version}</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -179,8 +219,7 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.8.0</version>
 				<configuration>
-					<source>1.8</source>
-					<target>1.8</target>
+					<release>11</release>
 				</configuration>
 			</plugin>
 		</plugins>
@@ -188,19 +227,25 @@
 
 	<properties>
 		<spring.version>5.3.20</spring.version>
+		<junit.jupiter.version>5.4.1</junit.jupiter.version>
+		<junit.vintage.version>5.4.1</junit.vintage.version>
+		<junit.platform.version>1.4.1</junit.platform.version>
+		<mockito.version>2.27.0</mockito.version>
 	</properties>
 
 	<distributionManagement>
 		<repository>
 			<id>sagebionetworks</id>
 			<name>sagebionetworks-releases</name>
-			<url>https://sagebionetworks.jfrog.io/sagebionetworks/libs-releases-local
+			<url>
+				https://sagebionetworks.jfrog.io/sagebionetworks/libs-releases-local
 			</url>
 		</repository>
 		<snapshotRepository>
 			<id>sagebionetworks</id>
 			<name>sagebionetworks-snapshots</name>
-			<url>https://sagebionetworks.jfrog.io/sagebionetworks/libs-snapshots-local
+			<url>
+				https://sagebionetworks.jfrog.io/sagebionetworks/libs-snapshots-local
 			</url>
 			<uniqueVersion>false</uniqueVersion>
 		</snapshotRepository>
