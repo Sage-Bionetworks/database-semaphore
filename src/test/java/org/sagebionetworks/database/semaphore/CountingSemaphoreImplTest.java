@@ -1,11 +1,11 @@
 package org.sagebionetworks.database.semaphore;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -15,17 +15,15 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.IntStream;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 /**
  * This is a database level integration test for the CountingSemaphore. In order
@@ -36,18 +34,18 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
  * To run in eclipse make sure the above properties are added to the "VM
  * Argumetns" of the test.
  */
-@RunWith(SpringJUnit4ClassRunner.class)
+@ExtendWith(SpringExtension.class)
 @ContextConfiguration(locations = { "classpath:test-context.spb.xml" })
 public class CountingSemaphoreImplTest {
 
 	private static final Logger log = LogManager.getLogger(CountingSemaphoreImplTest.class);
 
 	@Autowired
-	CountingSemaphore semaphore;
+	private CountingSemaphore semaphore;
 
-	String key;
+	private String key;
 
-	@Before
+	@BeforeEach
 	public void before() {
 		semaphore.releaseAllLocks();
 		key = "sampleKey";
@@ -92,7 +90,7 @@ public class CountingSemaphoreImplTest {
 		assertNotNull(token2);
 	}
 
-	@Test(expected = LockReleaseFailedException.class)
+	@Test
 	public void testReleaseExpiredLock() throws InterruptedException {
 		int maxLockCount = 1;
 		long timeoutSec = 1;
@@ -104,8 +102,10 @@ public class CountingSemaphoreImplTest {
 		// another should be able to get the lock
 		String token2 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
 		assertNotNull(token2);
-		// this should fail as the lock has already expired.
-		semaphore.releaseLock(key, token1);
+		assertThrows(LockReleaseFailedException.class, ()->{
+			// this should fail as the lock has already expired.
+			semaphore.releaseLock(key, token1);
+		});
 	}
 
 	@Test
@@ -125,7 +125,7 @@ public class CountingSemaphoreImplTest {
 		semaphore.releaseLock(key, token1);
 	}
 
-	@Test(expected = LockReleaseFailedException.class)
+	@Test
 	public void testRefreshExpiredLock() throws InterruptedException {
 		int maxLockCount = 1;
 		long timeoutSec = 1;
@@ -137,11 +137,13 @@ public class CountingSemaphoreImplTest {
 		// another should be able to get the lock
 		String token2 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
 		assertNotNull(token2);
-		// this should fail as the lock has already expired.
-		semaphore.refreshLockTimeout(key, token1, timeoutSec);
+		assertThrows(LockReleaseFailedException.class, ()->{
+			// this should fail as the lock has already expired.
+			semaphore.refreshLockTimeout(key, token1, timeoutSec);
+		});
 	}
 
-	@Test(expected = LockReleaseFailedException.class)
+	@Test
 	public void testReleaseLockAfterReleaseAllLocks() {
 		int maxLockCount = 1;
 		long timeoutSec = 1;
@@ -150,8 +152,10 @@ public class CountingSemaphoreImplTest {
 		assertNotNull(token1);
 		// Force the release of all locks
 		semaphore.releaseAllLocks();
-		// Now try to release the lock
-		semaphore.releaseLock(key, token1);
+		assertThrows(LockReleaseFailedException.class, ()->{
+			// Now try to release the lock
+			semaphore.releaseLock(key, token1);
+		});
 	}
 
 	/**
@@ -173,7 +177,7 @@ public class CountingSemaphoreImplTest {
 		// run all runners
 		List<Future<Boolean>> futures = executorService.invokeAll(runners);
 		int locksAcquired = countLocksAcquired(futures);
-		assertEquals("24 of 25 threads should have been issued a lock", locksAcquired, maxLockCount);
+		assertEquals(locksAcquired, maxLockCount, "24 of 25 threads should have been issued a lock");
 	}
 
 	/**
@@ -199,7 +203,7 @@ public class CountingSemaphoreImplTest {
 		// run all runners
 		List<Future<Boolean>> futures = executorService.invokeAll(runners);
 		int locksAcquired = countLocksAcquired(futures);
-		assertTrue("Most threads should have received a lock", locksAcquired >= maxThreads - 3);
+		assertTrue(locksAcquired >= maxThreads - 3, "Most threads should have received a lock");
 	}
 
 	private int countLocksAcquired(List<Future<Boolean>> futures)
