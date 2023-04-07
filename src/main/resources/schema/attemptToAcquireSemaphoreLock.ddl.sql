@@ -24,6 +24,6 @@ BEGIN
 	END IF;
 	COMMIT;
 	
-	/* Return either a new token if acquired */
+	/* Return the new token if acquired */
 	SELECT newToken AS TOKEN;
 END;
