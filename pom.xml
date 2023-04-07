@@ -227,7 +227,7 @@
 	</build>
 
 	<properties>
-		<spring.version>5.3.20</spring.version>
+		<spring.version>5.3.26</spring.version>
 		<junit.jupiter.version>5.4.1</junit.jupiter.version>
 		<junit.platform.version>1.4.1</junit.platform.version>
 		<mockito.version>2.27.0</mockito.version>
