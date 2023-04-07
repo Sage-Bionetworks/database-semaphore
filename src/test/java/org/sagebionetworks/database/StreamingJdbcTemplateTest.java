@@ -1,27 +1,28 @@
 package org.sagebionetworks.database;
 
-import static org.junit.Assert.*;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.verify;
 
 import java.sql.SQLException;
 import java.sql.Statement;
 
 import javax.sql.DataSource;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.Mockito;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+
+@ExtendWith(MockitoExtension.class)
 public class StreamingJdbcTemplateTest {
 	
-	DataSource mockDatasource;
-	Statement mockStatement;
-	
-	@Before
-	public void before(){
-		mockDatasource = Mockito.mock(DataSource.class);
-		mockStatement = Mockito.mock(Statement.class);
-	}
+	@Mock
+	private DataSource mockDatasource;
+	@Mock
+	private Statement mockStatement;
+
 	
 	@Test
 	public void testApplyStatementSettings() throws SQLException{

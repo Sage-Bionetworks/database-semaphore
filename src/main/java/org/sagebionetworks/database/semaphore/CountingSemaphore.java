@@ -1,5 +1,7 @@
 package org.sagebionetworks.database.semaphore;
 
+import java.util.Optional;
+
 /**
  * A Database backed semaphore that supports multiple locks to be issued for the
  * same key.
@@ -23,12 +25,18 @@ public interface CountingSemaphore {
 	 *                     will be forfeit. The lock timeout can be refreshed with
 	 *                     {@link #refreshLockTimeout(String, String, long)}
 	 * 
+	 * @param context      Describes the context for which the lock will be used.
+	 *                     When a lock cannot be acquired, the context of the
+	 *                     blocking lock will be provided. Context is required an
+	 *                     cannot be empty or more than 255 characters.
+	 * 
 	 * @return The token for the lock. This token must be used to release the lock.
-	 *         Returns null when no locks are available. The caller is expected to
+	 *         Returns Optional.empty() when no locks are available. The caller is expected to
 	 *         releases the lock {@link #releaseLock(String, String)} when finished
 	 *         with it.
 	 */
-	public String attemptToAcquireLock(String key, long timeoutSec, int maxLockCount);
+	public Optional<String> attemptToAcquireLock(String key, long timeoutSec, int maxLockCount, String context);
+	
 
 	/**
 	 * Refresh the expiration for a lock that is currently being held.
@@ -59,13 +67,15 @@ public interface CountingSemaphore {
 	 */
 	public void releaseAllLocks();
 
+
 	/**
-	 *
-	 * @param key key of the lock
-	 * @return true if an unexpired lock assigned to the key exists. false
-	 *         otherwise.
+	 * Get the context of the first lock that is not expired with the given key.
+	 * 
+	 * @param key
+	 * @return Optional.of(Context of the first lock found). If there are no locks
+	 *         for the key then Optional.empty().
 	 */
-	boolean existsUnexpiredLock(String key);
+	Optional<String> getFirstUnexpiredLockContext(String key);
 
 	/**
 	 * Cleaning up infrequently used locks can improve lock acquisition performance.
@@ -74,7 +84,7 @@ public interface CountingSemaphore {
 	 * a timer thread.
 	 */
 	public void runGarbageCollection();
-	
+
 	/**
 	 * Get the number of lock rows in the database.
 	 * 

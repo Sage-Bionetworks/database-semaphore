@@ -5,11 +5,15 @@ import static org.sagebionetworks.database.semaphore.Sql.COL_TABLE_SEM_LOCK_LOCK
 import static org.sagebionetworks.database.semaphore.Sql.COL_TABLE_SEM_LOCK_TOKEN;
 import static org.sagebionetworks.database.semaphore.Sql.TABLE_SEMAPHORE_LOCK;
 
+import java.sql.ResultSet;
+import java.util.Optional;
+
 import javax.sql.DataSource;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -36,6 +40,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 public class CountingSemaphoreImpl implements CountingSemaphore {
 
+	public static final int MAX_CONTEXT_CHARS = 256;
+
 	private static final String COUNT_LOCK_ROWS = "SELECT COUNT(*) FROM SEMAPHORE_LOCK";
 
 	private static final String GARBAGE_COLLECTION = "DELETE FROM SEMAPHORE_LOCK WHERE"
@@ -45,7 +51,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 
 	private static final String CALL_RELEASE_SEMAPHORE_LOCK = "CALL releaseSemaphoreLock(?)";
 
-	private static final String CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK = "CALL attemptToAcquireSemaphoreLock(?, ?, ?)";
+	private static final String CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK = "CALL attemptToAcquireSemaphoreLock(?, ?, ?, ?)";
 
 	private static final String REFRESH_SEMAPHORE_LOCK = "refreshSemaphoreLock";
 
@@ -61,13 +67,10 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	private static final String SQL_CLEAR_ALL_LOCKS = "UPDATE "+ TABLE_SEMAPHORE_LOCK+" SET TOKEN = NULL, EXPIRES_ON = NULL WHERE LOCK_KEY IS NOT NULL";
 
 	private static final String SQL_EXISTS_UNEXPIRED_LOCK =
-			"SELECT EXISTS (" +
-			"SELECT *" +
-			" FROM " + TABLE_SEMAPHORE_LOCK +
-			" WHERE " + COL_TABLE_SEM_LOCK_LOCK_KEY + " = ?" +
+			"SELECT CONTEXT FROM " + TABLE_SEMAPHORE_LOCK + " WHERE " + COL_TABLE_SEM_LOCK_LOCK_KEY + " = ?" +
 			" AND " + COL_TABLE_SEM_LOCK_TOKEN + " IS NOT NULL " +
 			" AND " + COL_TABLE_SEM_LOCK_EXPIRES_ON + " >= CURRENT_TIMESTAMP" +
-			")";
+			" LIMIT 1";
 	
 
 	private static final String SEMAPHORE_LOCK_DDL_SQL = "schema/SemaphoreLock.ddl.sql";
@@ -130,22 +133,26 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 * #attemptToAquireLock(java.lang.String, long, int)
 	 */
 	@Override
-	public String attemptToAcquireLock(final String key, final long timeoutSec,
-			final int maxLockCount) {
+	public Optional<String> attemptToAcquireLock(final String key, final long timeoutSec,
+			final int maxLockCount, final String inputContext) {
 		if (key == null) {
 			throw new IllegalArgumentException("Key cannot be null");
 		}
 		if (timeoutSec < 1) {
-			throw new IllegalArgumentException(
-					"TimeoutSec cannot be less then one.");
+			throw new IllegalArgumentException("TimeoutSec cannot be less then one.");
 		}
 		if (maxLockCount < 1) {
-			throw new IllegalArgumentException(
-					"MaxLockCount cannot be less then one.");
+			throw new IllegalArgumentException("MaxLockCount cannot be less then one.");
 		}
-		return jdbcTemplate.queryForObject(
-				CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK,
-				String.class, key, timeoutSec, maxLockCount);
+		if (inputContext == null || inputContext.isBlank()) {
+			throw new IllegalArgumentException("Context cannot be null or empty");
+		}
+		if (inputContext.length() > MAX_CONTEXT_CHARS) {
+			throw new IllegalArgumentException("Context length cannot be more than: "+MAX_CONTEXT_CHARS);
+		}
+		return jdbcTemplate.queryForObject(CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK, (ResultSet rs, int rowNum) -> {
+			return Optional.ofNullable(rs.getString("TOKEN"));
+		}, key, timeoutSec, maxLockCount, inputContext);
 
 	}
 
@@ -206,8 +213,12 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	}
 
 	@Override
-	public boolean existsUnexpiredLock(final String key){
-		return jdbcTemplate.queryForObject(SQL_EXISTS_UNEXPIRED_LOCK, Boolean.class, key);
+	public Optional<String> getFirstUnexpiredLockContext(final String key) {
+		try {
+			return Optional.of(jdbcTemplate.queryForObject(SQL_EXISTS_UNEXPIRED_LOCK, String.class, key));
+		}catch (EmptyResultDataAccessException e) {
+			return Optional.empty();
+		}
 	}
 
 	@Override
