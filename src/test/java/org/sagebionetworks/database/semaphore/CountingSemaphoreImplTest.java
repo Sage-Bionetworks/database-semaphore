@@ -1,7 +1,6 @@
 package org.sagebionetworks.database.semaphore;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -10,6 +9,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -44,11 +44,93 @@ public class CountingSemaphoreImplTest {
 	private CountingSemaphore semaphore;
 
 	private String key;
+	private String context;
 
 	@BeforeEach
 	public void before() {
 		semaphore.releaseAllLocks();
 		key = "sampleKey";
+		context = "sample context";
+	}
+	
+	/**
+	 * Helper to translate old tests to new optional result.
+	 * @param key
+	 * @param timeoutSec
+	 * @param maxLockCount
+	 * @param context
+	 * @return
+	 */
+	private String attemptToAcquireLock(String key, long timeoutSec, int maxLockCount, String context) {
+		Optional<String> result = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
+		if(result.isEmpty()) {
+			return null;
+		}
+		return result.get();
+	}
+	
+	@Test
+	public void testAttemptToAcquireLockWithNullKey() {
+		key = null;
+		int maxLockCount = 2;
+		long timeoutSec = 60;
+		context = "some context";
+		String message = assertThrows(IllegalArgumentException.class, ()->{
+			// call under test
+			semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
+		}).getMessage();
+		assertEquals("Key cannot be null", message);
+	}
+	
+	@Test
+	public void testAttemptToAcquireLockWithNullContext() {
+		key = "aKey";
+		int maxLockCount = 2;
+		long timeoutSec = 60;
+		context = null;
+		String message = assertThrows(IllegalArgumentException.class, ()->{
+			// call under test
+			semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
+		}).getMessage();
+		assertEquals("Context cannot be null or empty", message);
+	}
+	
+	@Test
+	public void testAttemptToAcquireLockWithEmptyContext() {
+		key = "aKey";
+		int maxLockCount = 2;
+		long timeoutSec = 60;
+		context = " \t";
+		String message = assertThrows(IllegalArgumentException.class, ()->{
+			// call under test
+			semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
+		}).getMessage();
+		assertEquals("Context cannot be null or empty", message);
+	}
+	
+	@Test
+	public void testAttemptToAcquireLockWithContextAtMaxLength() {
+		key = "aKey";
+		int maxLockCount = 2;
+		long timeoutSec = 60;
+		context = "a".repeat(CountingSemaphoreImpl.MAX_CONTEXT_CHARS);
+	    Optional<String> token = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
+	    assertTrue(token.isPresent());
+	    Optional<String> contextOp = semaphore.getFirstUnexpiredLockContext(key);
+	    assertEquals(Optional.of(context), contextOp);
+	}
+	
+	@Test
+	public void testAttemptToAcquireLockWithContextOverLimit() {
+		key = "aKey";
+		int maxLockCount = 2;
+		long timeoutSec = 60;
+		context = "a".repeat(CountingSemaphoreImpl.MAX_CONTEXT_CHARS+1);
+		String message = assertThrows(IllegalArgumentException.class, ()->{
+			// call under test
+			semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
+		}).getMessage();
+		assertEquals("Context length cannot be more than: "+CountingSemaphoreImpl.MAX_CONTEXT_CHARS, message);
 	}
 
 	@Test
@@ -57,19 +139,19 @@ public class CountingSemaphoreImplTest {
 		long timeoutSec = 60;
 		// get one lock
 		long start = System.currentTimeMillis();
-		String token1 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		String token1 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertNotNull(token1);
 		log.info("AcquiredLock in " + (System.currentTimeMillis() - start) + " MS");
 		// get another
-		String token2 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		String token2 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertNotNull(token2);
 		// Try for a third should not acquire a lock
-		String token3 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		String token3 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertEquals(null, token3);
 		// release
 		semaphore.releaseLock(key, token2);
 		// we should now be able to get a new lock
-		token3 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		token3 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertNotNull(token3);
 	}
 
@@ -78,15 +160,15 @@ public class CountingSemaphoreImplTest {
 		int maxLockCount = 1;
 		long timeoutSec = 1;
 		// get one lock
-		String token1 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		String token1 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertNotNull(token1);
 		// Should not be able to get a lock
-		String token2 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		String token2 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertEquals(null, token2);
 		// Wait for the lock first lock to expire
 		Thread.sleep(timeoutSec * 1000 * 2);
 		// We should now be able to get the lock as the first is expired.
-		token2 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		token2 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertNotNull(token2);
 	}
 
@@ -95,12 +177,12 @@ public class CountingSemaphoreImplTest {
 		int maxLockCount = 1;
 		long timeoutSec = 1;
 		// get one lock
-		String token1 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		String token1 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertNotNull(token1);
 		// Wait until the lock expires
 		Thread.sleep(timeoutSec * 1000 * 2);
 		// another should be able to get the lock
-		String token2 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		String token2 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertNotNull(token2);
 		assertThrows(LockReleaseFailedException.class, ()->{
 			// this should fail as the lock has already expired.
@@ -113,7 +195,7 @@ public class CountingSemaphoreImplTest {
 		int maxLockCount = 1;
 		long timeoutSec = 2;
 		// get one lock
-		String token1 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		String token1 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertNotNull(token1);
 		// We should be able to refresh the lock.
 		for (int i = 0; i < timeoutSec + 1; i++) {
@@ -130,12 +212,12 @@ public class CountingSemaphoreImplTest {
 		int maxLockCount = 1;
 		long timeoutSec = 1;
 		// get one lock
-		String token1 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		String token1 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertNotNull(token1);
 		// Wait until the lock expires
 		Thread.sleep(timeoutSec * 1000 * 2);
 		// another should be able to get the lock
-		String token2 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		String token2 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertNotNull(token2);
 		assertThrows(LockReleaseFailedException.class, ()->{
 			// this should fail as the lock has already expired.
@@ -148,7 +230,7 @@ public class CountingSemaphoreImplTest {
 		int maxLockCount = 1;
 		long timeoutSec = 1;
 		// get one lock
-		String token1 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount);
+		String token1 = attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertNotNull(token1);
 		// Force the release of all locks
 		semaphore.releaseAllLocks();
@@ -171,7 +253,7 @@ public class CountingSemaphoreImplTest {
 		ExecutorService executorService = Executors.newFixedThreadPool(maxThreads);
 		List<Callable<Boolean>> runners = new LinkedList<Callable<Boolean>>();
 		for (int i = 0; i < maxThreads; i++) {
-			TestRunner runner = new TestRunner(semaphore, key, lockTimeoutSec, maxLockCount);
+			TestRunner runner = new TestRunner(semaphore, key, lockTimeoutSec, maxLockCount, context);
 			runners.add(runner);
 		}
 		// run all runners
@@ -197,7 +279,7 @@ public class CountingSemaphoreImplTest {
 		ExecutorService executorService = Executors.newFixedThreadPool(maxThreads);
 		List<Callable<Boolean>> runners = new LinkedList<Callable<Boolean>>();
 		for (String key : keys) {
-			TestRunner runner = new TestRunner(semaphore, key, lockTimeoutSec, maxLocksPerThread);
+			TestRunner runner = new TestRunner(semaphore, key, lockTimeoutSec, maxLocksPerThread, context);
 			runners.add(runner);
 		}
 		// run all runners
@@ -217,11 +299,11 @@ public class CountingSemaphoreImplTest {
 		return locksAcquired;
 	}
 
-	private void holdLocksOfSameKeyWithTimeouts(String lockKey, List<Long> lockTimeouts)
+	private void holdLocksOfSameKeyWithTimeouts(String lockKey, List<Long> lockTimeouts, String context)
 			throws InterruptedException, java.util.concurrent.ExecutionException {
 		int locksAcquired = 0;
 		for (long timeoutSec : lockTimeouts) {
-			String token = semaphore.attemptToAcquireLock(lockKey, timeoutSec, lockTimeouts.size());
+			String token = attemptToAcquireLock(lockKey, timeoutSec, lockTimeouts.size(), context);
 			if (token != null && !token.isEmpty()) {
 				locksAcquired++;
 			}
@@ -235,10 +317,9 @@ public class CountingSemaphoreImplTest {
 		// set up unexpired locks held by other threads with a different key;
 		String unrelatedLockKey = "unrelatedLock";
 		List<Long> lockTimeouts = Collections.nCopies(5, 50L); // 5 locks w/ expiration of 50 seconds each
-		holdLocksOfSameKeyWithTimeouts(unrelatedLockKey, lockTimeouts);
-
+		holdLocksOfSameKeyWithTimeouts(unrelatedLockKey, lockTimeouts, context);
 		// method under test
-		assertFalse(semaphore.existsUnexpiredLock("otherKey"));
+		assertEquals(Optional.empty(), semaphore.getFirstUnexpiredLockContext("otherKey"));
 	}
 
 	@Test
@@ -246,24 +327,23 @@ public class CountingSemaphoreImplTest {
 		// set up locks that will expire
 		String lockKey = "sameKey";
 		List<Long> lockTimeouts = Collections.nCopies(5, 1L); // 5 locks w/ expiration of 1 second each
-		holdLocksOfSameKeyWithTimeouts(lockKey, lockTimeouts);
+		holdLocksOfSameKeyWithTimeouts(lockKey, lockTimeouts, context);
 		Thread.sleep(2000);
 
 		// method under test
-		assertFalse(semaphore.existsUnexpiredLock(lockKey));
-
+		assertEquals(Optional.empty(), semaphore.getFirstUnexpiredLockContext(lockKey));
 	}
 
 	@Test
-	public void mtestExistsUnexpiredLock_existAndSomeUnexpired() throws ExecutionException, InterruptedException {
+	public void testExistsUnexpiredLock_existAndSomeUnexpired() throws ExecutionException, InterruptedException {
 		// set up locks that will expire
 		String lockKey = "sameKey";
 		List<Long> lockTimeouts = Arrays.asList(1L, 1L, 600L, 1L, 1L);
-		holdLocksOfSameKeyWithTimeouts(lockKey, lockTimeouts);
+		holdLocksOfSameKeyWithTimeouts(lockKey, lockTimeouts, context);
 		Thread.sleep(1000);
 
 		// method under test
-		assertTrue(semaphore.existsUnexpiredLock(lockKey));
+		assertEquals(Optional.of(context), semaphore.getFirstUnexpiredLockContext(lockKey));
 	}
 
 	@Test
@@ -275,7 +355,7 @@ public class CountingSemaphoreImplTest {
 		String lockKey = "newLockKey";
 		long lockTimeoutSec = 2;
 		int maxLockCount = 2;
-		String token = semaphore.attemptToAcquireLock(lockKey, lockTimeoutSec, maxLockCount);
+		String token = attemptToAcquireLock(lockKey, lockTimeoutSec, maxLockCount, context);
 		semaphore.releaseLock(lockKey, token);
 		// should still have two lock rows
 		assertEquals(2, semaphore.getLockRowCount());
@@ -303,7 +383,7 @@ public class CountingSemaphoreImplTest {
 		List<String> keys = new LinkedList<String>();
 		for (int i = 0; i < count; i++) {
 			String key = "i-" + i;
-			String token = semaphore.attemptToAcquireLock(key, 1000, maxKeys);
+			String token = attemptToAcquireLock(key, 1000, maxKeys, context);
 			semaphore.releaseLock(key, token);
 			keys.add(key);
 		}
@@ -316,21 +396,24 @@ public class CountingSemaphoreImplTest {
 		long lockTimeoutSec;
 		int maxLockCount;
 		long sleepTimeMs;
+		String context;
 
-		public TestRunner(CountingSemaphore semaphore, String key, long lockTimeoutSec, int maxLockCount) {
+		public TestRunner(CountingSemaphore semaphore, String key, long lockTimeoutSec, int maxLockCount, String context) {
 			super();
 			this.semaphore = semaphore;
 			this.key = key;
 			this.lockTimeoutSec = lockTimeoutSec;
 			this.maxLockCount = maxLockCount;
 			this.sleepTimeMs = 1000L;
+			this.context = context;
 		}
 
 		public Boolean call() throws Exception {
 			long start = System.currentTimeMillis();
-			String token = semaphore.attemptToAcquireLock(key, lockTimeoutSec, maxLockCount);
-			log.info("AcquiredLock in " + (System.currentTimeMillis() - start) + " MS with token: " + token);
-			if (token != null) {
+			Optional<String> result = semaphore.attemptToAcquireLock(key, lockTimeoutSec, maxLockCount, context);
+			
+			log.info("AcquiredLock in " + (System.currentTimeMillis() - start) + " MS with token: " + result);
+			if (result.isPresent()) {
 				try {
 					Thread.sleep(sleepTimeMs);
 					// the lock was acquired and held
@@ -338,7 +421,7 @@ public class CountingSemaphoreImplTest {
 				} catch (InterruptedException e) {
 					throw new RuntimeException(e);
 				} finally {
-					semaphore.releaseLock(key, token);
+					semaphore.releaseLock(key, result.get());
 				}
 			} else {
 				// lock was not acquired
