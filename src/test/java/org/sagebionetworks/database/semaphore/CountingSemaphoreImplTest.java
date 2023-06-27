@@ -1,10 +1,12 @@
 package org.sagebionetworks.database.semaphore;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -22,8 +24,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * This is a database level integration test for the CountingSemaphore. In order
@@ -42,9 +49,14 @@ public class CountingSemaphoreImplTest {
 
 	@Autowired
 	private CountingSemaphore semaphore;
+	
+	@Autowired
+	private DataSourceTransactionManager txManager;
+	
 
 	private String key;
 	private String context;
+	
 
 	@BeforeEach
 	public void before() {
@@ -371,6 +383,90 @@ public class CountingSemaphoreImplTest {
 		// garbage collection should now clear the locks
 		semaphore.runGarbageCollection();
 		assertEquals(0, semaphore.getLockRowCount());
+	}
+	
+	@Test
+	public void testAttemptToAcquireLockInNewTransaction() {
+		JdbcTemplate jdbcTemplate = new JdbcTemplate(txManager.getDataSource());
+				
+		DefaultTransactionDefinition txDef = new DefaultTransactionDefinition();
+		
+		txDef.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+		txDef.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+		
+		TransactionTemplate txTemplate = new TransactionTemplate(txManager, txDef);
+		
+		assertThrows(RuntimeException.class, () -> {			
+			txTemplate.executeWithoutResult((txStatus) -> {
+				jdbcTemplate.update("INSERT INTO SEMAPHORE_LOCK VALUES(-1, 'someKey', 0, NULL, NOW(), NULL)");
+				
+				// Call under test
+				semaphore.attemptToAcquireLock("key", 5, 1, context);
+				
+				throw new RuntimeException("Something went wrong");
+			});
+		});
+		
+		assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'someKey'", Long.class));
+		assertEquals(1L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'", Long.class));
+	}
+	
+	@Test
+	public void testReleaseLockInNewTransaction() {
+		JdbcTemplate jdbcTemplate = new JdbcTemplate(txManager.getDataSource());
+				
+		String token = semaphore.attemptToAcquireLock("key", 5, 1, context).get();
+		
+		DefaultTransactionDefinition txDef = new DefaultTransactionDefinition();
+		
+		txDef.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+		txDef.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+		
+		TransactionTemplate txTemplate = new TransactionTemplate(txManager, txDef);
+		
+		assertThrows(RuntimeException.class, () -> {			
+			txTemplate.executeWithoutResult((txStatus) -> {
+				jdbcTemplate.update("INSERT INTO SEMAPHORE_LOCK VALUES(-1, 'someKey', 0, NULL, NOW(), NULL)");
+				
+				// Call under test
+				semaphore.releaseLock("key", token);
+				
+				throw new RuntimeException("Something went wrong");
+			});
+		});
+		
+		assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'someKey'", Long.class));
+		assertEquals(null, jdbcTemplate.queryForObject("SELECT TOKEN FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'", String.class));
+	}
+	
+	@Test
+	public void testRefreshLockInNewTransaction() {
+		JdbcTemplate jdbcTemplate = new JdbcTemplate(txManager.getDataSource());
+				
+		String token = semaphore.attemptToAcquireLock("key", 5, 1, context).get();
+		
+		Timestamp expireOn = jdbcTemplate.queryForObject("SELECT EXPIRES_ON FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'", Timestamp.class);
+		
+		DefaultTransactionDefinition txDef = new DefaultTransactionDefinition();
+		
+		txDef.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+		txDef.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+		
+		TransactionTemplate txTemplate = new TransactionTemplate(txManager, txDef);
+		
+		assertThrows(RuntimeException.class, () -> {			
+			txTemplate.executeWithoutResult((txStatus) -> {
+				jdbcTemplate.update("INSERT INTO SEMAPHORE_LOCK VALUES(-1, 'someKey', 0, NULL, NOW(), NULL)");
+				
+				// Call under test
+				semaphore.refreshLockTimeout("key", token, 10);
+				
+				throw new RuntimeException("Something went wrong");
+			});
+		});
+		
+		assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'someKey'", Long.class));
+		assertNotEquals(expireOn, jdbcTemplate.queryForObject("SELECT EXPIRES_ON FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'", Timestamp.class));
 	}
 
 	/**

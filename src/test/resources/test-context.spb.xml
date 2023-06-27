@@ -9,7 +9,9 @@
 
 	<!-- Trun on Spring's auotproxy using AspectJ's @Aspect annotations. -->
 	<aop:aspectj-autoproxy />
-
+	
+	<import resource="classpath:semaphore-spb.xml" />
+	
 	<!-- This is serving as the JDBC connection pool -->
 	<bean id="dataSourcePool" class="org.apache.commons.dbcp2.BasicDataSource"
 		destroy-method="close">
