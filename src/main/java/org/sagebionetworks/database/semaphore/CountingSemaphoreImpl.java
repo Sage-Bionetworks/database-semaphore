@@ -15,6 +15,9 @@ import org.apache.logging.log4j.Logger;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * <p>
@@ -32,6 +35,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * href="https://sagebionetworks.jira.com/browse/PLFM-3439">PLFM-3439</a>
  * <p>
  * This class is thread-safe and can be used as a singleton.
+ * </p>
+ * <p>
+ * Note that acquiring, releasing and refreshing a lock needs to run in its own separate transaction.
+ * If setup through a spring bean, transaction management can be enabled to do so automatically since
+ * each method is annotated as Transactional with REQUIRES_NEW propagation. 
  * </p>
  * 
  * @author John
@@ -96,7 +104,6 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			throw new IllegalArgumentException("DataSource cannot be null");
 		}
 		jdbcTemplate = new JdbcTemplate(dataSourcePool);
-
 		// Create the tables
 		this.jdbcTemplate.update(Utils
 				.loadStringFromClassPath(SEMAPHORE_LOCK_DDL_SQL));
@@ -113,8 +120,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	 */
 	private void createProcedureIfDoesNotExist(String name) {
 		try {
-			this.jdbcTemplate.update(Utils.loadStringFromClassPath(String
-					.format(PROCEDURE_DDL_SQL_TEMPLATE, name)));
+			this.jdbcTemplate.update(Utils.loadStringFromClassPath(String.format(PROCEDURE_DDL_SQL_TEMPLATE, name)));
 		} catch (DataAccessException e) {
 			String message = String.format(PROCEDURE_EXITS_TEMPLATE, name);
 			if (e.getMessage().contains(message)) {
@@ -124,15 +130,9 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 			}
 		}
 	}
-
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see
-	 * org.sagebionetworks.warehouse.workers.semaphore.MultipleLockSemaphore
-	 * #attemptToAquireLock(java.lang.String, long, int)
-	 */
+	
 	@Override
+	@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Throwable.class, propagation = Propagation.REQUIRES_NEW)
 	public Optional<String> attemptToAcquireLock(final String key, final long timeoutSec,
 			final int maxLockCount, final String inputContext) {
 		if (key == null) {
@@ -156,14 +156,8 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see
-	 * org.sagebionetworks.warehouse.workers.semaphore.MultipleLockSemaphore
-	 * #releaseLock(java.lang.String, java.lang.String)
-	 */
 	@Override
+	@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Throwable.class, propagation = Propagation.REQUIRES_NEW)
 	public void releaseLock(final String key, final String token) {
 		if (key == null) {
 			throw new IllegalArgumentException("Key cannot be null");
@@ -177,24 +171,13 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see
-	 * org.sagebionetworks.warehouse.workers.semaphore.MultipleLockSemaphore
-	 * #releaseAllLocks()
-	 */
+	@Override
 	public void releaseAllLocks() {
 		jdbcTemplate.update(SQL_CLEAR_ALL_LOCKS);
 	}
-
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see
-	 * org.sagebionetworks.warehouse.workers.semaphore.MultipleLockSemaphore
-	 * #refreshLockTimeout(java.lang.String, java.lang.String, long)
-	 */
+	
+	@Override
+	@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Throwable.class, propagation = Propagation.REQUIRES_NEW)
 	public void refreshLockTimeout(final String key, final String token,
 			final long timeoutSec) {
 		if (key == null) {

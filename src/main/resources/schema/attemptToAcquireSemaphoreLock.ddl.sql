@@ -4,13 +4,10 @@ CREATE PROCEDURE attemptToAcquireSemaphoreLock(IN lockKey VARCHAR(256), IN timeo
 BEGIN
 	DECLARE newToken VARCHAR(256) DEFAULT NULL;
 	DECLARE rowId MEDIUMINT DEFAULT NULL;
-	
-	SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
-    
+	    
     /* Ensure the lock rows exist for this key */
     CALL bootstrapLockKeyRows(lockKey, maxLockCount);
 	
-	START TRANSACTION;
 	/* Find the first number for the given lock that has a null token or is expired. */
 	SELECT ROW_ID INTO rowId FROM SEMAPHORE_LOCK WHERE LOCK_KEY = lockKey AND LOCK_NUM < maxLockCount
 		AND (TOKEN IS NULL OR EXPIRES_ON < current_timestamp) LIMIT 1 FOR UPDATE SKIP LOCKED;
@@ -22,7 +19,6 @@ BEGIN
         		CONTEXT = inContext
         	WHERE ROW_ID = rowId;
 	END IF;
-	COMMIT;
 	
 	/* Return the new token if acquired */
 	SELECT newToken AS TOKEN;
