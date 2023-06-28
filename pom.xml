@@ -138,14 +138,6 @@
 			<version>${junit.platform.version}</version>
 			<scope>test</scope>
 		</dependency>
-		<!--adds a subset of junit5 functionality to tests currently running under 
-				junit4. should be REMOVED once fully converted to junit5 -->
-		<dependency>
-			<groupId>org.junit.platform</groupId>
-			<artifactId>junit-platform-runner</artifactId>
-			<version>${junit.platform.version}</version>
-			<scope>test</scope>
-		</dependency>
 		<!--junit5 engine -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
