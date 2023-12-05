@@ -14,6 +14,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
@@ -150,9 +151,14 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 		if (inputContext.length() > MAX_CONTEXT_CHARS) {
 			throw new IllegalArgumentException("Context length cannot be more than: "+MAX_CONTEXT_CHARS);
 		}
-		return jdbcTemplate.queryForObject(CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK, (ResultSet rs, int rowNum) -> {
-			return Optional.ofNullable(rs.getString("TOKEN"));
-		}, key, timeoutSec, maxLockCount, inputContext);
+		try {
+			return jdbcTemplate.queryForObject(CALL_ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK, (ResultSet rs, int rowNum) -> {
+				return Optional.ofNullable(rs.getString("TOKEN"));
+			}, key, timeoutSec, maxLockCount, inputContext);
+		} catch (TransientDataAccessException e) {
+			log.warn("Failed to acquire lock on key {}: {}", key, e.getMessage(), e);
+			return Optional.empty();
+		}
 
 	}
 
