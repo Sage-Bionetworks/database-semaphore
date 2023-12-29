@@ -13,10 +13,9 @@ env:
   mysql_user: azurediamond
   mysql_password: hunter2
 jobs:
-  build:
-
+  test:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - name: Set up JDK 11
@@ -39,3 +38,36 @@ jobs:
         mysql password: ${{ env.mysql_password }}
     - name: Build with Maven
       run: mvn -B package --file pom.xml -Djdbc.url=jdbc:mysql://localhost/${{ env.mysql_database }} -Djdbc.username=${{ env.mysql_user }} -Djdbc.password=${{ env.mysql_password }}
+
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: 11
+          distribution: corretto
+          cache: 'maven'
+          server-id: sagebionetworks
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_USERPWD
+      - name: Setup MySQL
+        # You may pin to the exact commit or the version.
+        # uses: mirromutth/mysql-action@de1fba8b3f90ce8db80f663a7043be3cf3231248
+        uses: mirromutth/mysql-action@v1.1
+        with:
+          # Version of MySQL to use
+          mysql version: 8.0.31
+          # MYSQL_DATABASE - name for the default database that is created
+          mysql database: ${{ env.mysql_database }}
+          # MYSQL_USER - create the specified user with superuser power for created database
+          mysql user: ${{ env.mysql_user }}
+          # MYSQL_PASSWORD - specified superuser password which user is power for created database
+          mysql password: ${{ env.mysql_password }}
+      - name: Deploy
+        run: mvn -B deploy --file pom.xml -Djdbc.url=jdbc:mysql://localhost/${{ env.mysql_database }} -Djdbc.username=${{ env.mysql_user }} -Djdbc.password=${{ env.mysql_password }}
+        env:
+          MAVEN_USERNAME: ${{ secrets.ARTIFACTORY_USER }}
+          MAVEN_USERPWD: ${{ secrets.ARTIFACTORY_PWD }}
