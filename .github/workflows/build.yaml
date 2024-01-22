@@ -6,13 +6,14 @@ on:
         required: true
         type: string
 
+env:
+  mysql_database: semaphore
+  mysql_user: azurediamond
+  mysql_password: hunter2    
+    
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      mysql_database: semaphore
-      mysql_user: azurediamond
-      mysql_password: hunter2    
     steps:
     - uses: actions/checkout@v4
     - name: Set up JDK 11
@@ -38,7 +39,7 @@ jobs:
         # MYSQL_PASSWORD - specified superuser password which user is power for created database
         mysql password: ${{ env.mysql_password }}
     - name: Build with Maven
-      run: mvn -B package --file pom.xml -Djdbc.url=jdbc:mysql://localhost/${{ env.mysql_database }} -Djdbc.username=${{ env.mysql_user }} -Djdbc.password=${{ env.mysql_password }}
+      run: mvn -B ${{ inputs.mvn_goal }} --file pom.xml -Djdbc.url=jdbc:mysql://localhost/${{ env.mysql_database }} -Djdbc.username=${{ env.mysql_user }} -Djdbc.password=${{ env.mysql_password }}
       env:
         MAVEN_USERNAME: ${{ secrets.PLATFORM_ARTIFACTORY_USER }}
         MAVEN_USERPWD: ${{ secrets.PLATFORM_ARTIFACTORY_PWD }}
