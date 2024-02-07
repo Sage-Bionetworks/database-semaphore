@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Collections;
@@ -18,11 +19,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -50,14 +53,12 @@ public class CountingSemaphoreImplTest {
 
 	@Autowired
 	private CountingSemaphore semaphore;
-	
+
 	@Autowired
 	private DataSourceTransactionManager txManager;
-	
 
 	private String key;
 	private String context;
-	
 
 	@BeforeEach
 	public void before() {
@@ -65,69 +66,69 @@ public class CountingSemaphoreImplTest {
 		key = "sampleKey";
 		context = "sample context";
 	}
-		
+
 	@Test
 	public void testAttemptToAcquireLockWithNullKey() {
 		key = null;
 		int maxLockCount = 2;
 		long timeoutSec = 60;
 		context = "some context";
-		String message = assertThrows(IllegalArgumentException.class, ()->{
+		String message = assertThrows(IllegalArgumentException.class, () -> {
 			// call under test
 			semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		}).getMessage();
 		assertEquals("Key cannot be null", message);
 	}
-	
+
 	@Test
 	public void testAttemptToAcquireLockWithNullContext() {
 		key = "aKey";
 		int maxLockCount = 2;
 		long timeoutSec = 60;
 		context = null;
-		String message = assertThrows(IllegalArgumentException.class, ()->{
+		String message = assertThrows(IllegalArgumentException.class, () -> {
 			// call under test
 			semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		}).getMessage();
 		assertEquals("Context cannot be null or empty", message);
 	}
-	
+
 	@Test
 	public void testAttemptToAcquireLockWithEmptyContext() {
 		key = "aKey";
 		int maxLockCount = 2;
 		long timeoutSec = 60;
 		context = " \t";
-		String message = assertThrows(IllegalArgumentException.class, ()->{
+		String message = assertThrows(IllegalArgumentException.class, () -> {
 			// call under test
 			semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		}).getMessage();
 		assertEquals("Context cannot be null or empty", message);
 	}
-	
+
 	@Test
 	public void testAttemptToAcquireLockWithContextAtMaxLength() {
 		key = "aKey";
 		int maxLockCount = 2;
 		long timeoutSec = 60;
 		context = "a".repeat(CountingSemaphoreImpl.MAX_CONTEXT_CHARS);
-	    Optional<String> token = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
-	    assertTrue(token.isPresent());
-	    Optional<String> contextOp = semaphore.getFirstUnexpiredLockContext(key);
-	    assertEquals(Optional.of(context), contextOp);
+		Optional<String> token = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
+		assertTrue(token.isPresent());
+		Optional<String> contextOp = semaphore.getFirstUnexpiredLockContext(key);
+		assertEquals(Optional.of(context), contextOp);
 	}
-	
+
 	@Test
 	public void testAttemptToAcquireLockWithContextOverLimit() {
 		key = "aKey";
 		int maxLockCount = 2;
 		long timeoutSec = 60;
-		context = "a".repeat(CountingSemaphoreImpl.MAX_CONTEXT_CHARS+1);
-		String message = assertThrows(IllegalArgumentException.class, ()->{
+		context = "a".repeat(CountingSemaphoreImpl.MAX_CONTEXT_CHARS + 1);
+		String message = assertThrows(IllegalArgumentException.class, () -> {
 			// call under test
 			semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		}).getMessage();
-		assertEquals("Context length cannot be more than: "+CountingSemaphoreImpl.MAX_CONTEXT_CHARS, message);
+		assertEquals("Context length cannot be more than: " + CountingSemaphoreImpl.MAX_CONTEXT_CHARS, message);
 	}
 
 	@Test
@@ -181,7 +182,7 @@ public class CountingSemaphoreImplTest {
 		// another should be able to get the lock
 		Optional<String> token2 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertTrue(token2.isPresent());
-		assertThrows(LockReleaseFailedException.class, ()->{
+		assertThrows(LockReleaseFailedException.class, () -> {
 			// this should fail as the lock has already expired.
 			semaphore.releaseLock(key, token1.get());
 		});
@@ -216,7 +217,7 @@ public class CountingSemaphoreImplTest {
 		// another should be able to get the lock
 		Optional<String> token2 = semaphore.attemptToAcquireLock(key, timeoutSec, maxLockCount, context);
 		assertTrue(token2.isPresent());
-		assertThrows(LockReleaseFailedException.class, ()->{
+		assertThrows(LockReleaseFailedException.class, () -> {
 			// this should fail as the lock has already expired.
 			semaphore.refreshLockTimeout(key, token1.get(), timeoutSec);
 		});
@@ -231,7 +232,7 @@ public class CountingSemaphoreImplTest {
 		assertTrue(token1.isPresent());
 		// Force the release of all locks
 		semaphore.releaseAllLocks();
-		assertThrows(LockReleaseFailedException.class, ()->{
+		assertThrows(LockReleaseFailedException.class, () -> {
 			// Now try to release the lock
 			semaphore.releaseLock(key, token1.get());
 		});
@@ -369,91 +370,157 @@ public class CountingSemaphoreImplTest {
 		semaphore.runGarbageCollection();
 		assertEquals(0, semaphore.getLockRowCount());
 	}
-	
+
 	@Test
 	public void testAttemptToAcquireLockInNewTransaction() {
 		JdbcTemplate jdbcTemplate = new JdbcTemplate(txManager.getDataSource());
-				
+
 		DefaultTransactionDefinition txDef = new DefaultTransactionDefinition();
-		
+
 		txDef.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
 		txDef.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
-		
+
 		TransactionTemplate txTemplate = new TransactionTemplate(txManager, txDef);
-		
-		assertThrows(RuntimeException.class, () -> {			
+
+		assertThrows(RuntimeException.class, () -> {
 			txTemplate.executeWithoutResult((txStatus) -> {
 				jdbcTemplate.update("INSERT INTO SEMAPHORE_LOCK VALUES(-1, 'someKey', 0, NULL, NOW(), NULL)");
-				
+
 				// Call under test
 				semaphore.attemptToAcquireLock("key", 5, 1, context);
-				
+
 				throw new RuntimeException("Something went wrong");
 			});
 		});
-		
-		assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'someKey'", Long.class));
-		assertEquals(1L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'", Long.class));
+
+		assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'someKey'",
+				Long.class));
+		assertEquals(1L,
+				jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'", Long.class));
 	}
-	
+
 	@Test
 	public void testReleaseLockInNewTransaction() {
 		JdbcTemplate jdbcTemplate = new JdbcTemplate(txManager.getDataSource());
-				
+
 		String token = semaphore.attemptToAcquireLock("key", 5, 1, context).get();
-		
+
 		DefaultTransactionDefinition txDef = new DefaultTransactionDefinition();
-		
+
 		txDef.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
 		txDef.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
-		
+
 		TransactionTemplate txTemplate = new TransactionTemplate(txManager, txDef);
-		
-		assertThrows(RuntimeException.class, () -> {			
+
+		assertThrows(RuntimeException.class, () -> {
 			txTemplate.executeWithoutResult((txStatus) -> {
 				jdbcTemplate.update("INSERT INTO SEMAPHORE_LOCK VALUES(-1, 'someKey', 0, NULL, NOW(), NULL)");
-				
+
 				// Call under test
 				semaphore.releaseLock("key", token);
-				
+
 				throw new RuntimeException("Something went wrong");
 			});
 		});
-		
-		assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'someKey'", Long.class));
-		assertEquals(null, jdbcTemplate.queryForObject("SELECT TOKEN FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'", String.class));
+
+		assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'someKey'",
+				Long.class));
+		assertEquals(null,
+				jdbcTemplate.queryForObject("SELECT TOKEN FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'", String.class));
 	}
-	
+
 	@Test
 	public void testRefreshLockInNewTransaction() {
 		JdbcTemplate jdbcTemplate = new JdbcTemplate(txManager.getDataSource());
-				
+
 		String token = semaphore.attemptToAcquireLock("key", 5, 1, context).get();
-		
-		Timestamp expireOn = jdbcTemplate.queryForObject("SELECT EXPIRES_ON FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'", Timestamp.class);
-		
+
+		Timestamp expireOn = jdbcTemplate.queryForObject("SELECT EXPIRES_ON FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'",
+				Timestamp.class);
+
 		DefaultTransactionDefinition txDef = new DefaultTransactionDefinition();
-		
+
 		txDef.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
 		txDef.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
-		
+
 		TransactionTemplate txTemplate = new TransactionTemplate(txManager, txDef);
-		
-		assertThrows(RuntimeException.class, () -> {			
+
+		assertThrows(RuntimeException.class, () -> {
 			txTemplate.executeWithoutResult((txStatus) -> {
 				jdbcTemplate.update("INSERT INTO SEMAPHORE_LOCK VALUES(-1, 'someKey', 0, NULL, NOW(), NULL)");
-				
+
 				// Call under test
 				semaphore.refreshLockTimeout("key", token, 10);
-				
+
 				throw new RuntimeException("Something went wrong");
 			});
 		});
-		
-		assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'someKey'", Long.class));
-		assertNotEquals(expireOn, jdbcTemplate.queryForObject("SELECT EXPIRES_ON FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'", Timestamp.class));
+
+		assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'someKey'",
+				Long.class));
+		assertNotEquals(expireOn, jdbcTemplate
+				.queryForObject("SELECT EXPIRES_ON FROM SEMAPHORE_LOCK WHERE LOCK_KEY = 'key'", Timestamp.class));
 	}
-	
+
+	@Test
+	@Timeout(value = 10, unit = TimeUnit.SECONDS)
+	public void testAttemptToAcquireSemaphoreLockWithBootstraping() {
+		JdbcTemplate jdbcTemplate = new JdbcTemplate(txManager.getDataSource());
+
+		// clear all of the rows rows in the semaphore table to guarantee that bootstraping will insert new rows.
+		semaphore.releaseAllLocks();
+		semaphore.runGarbageCollection();
+
+		DefaultTransactionDefinition txDef = new DefaultTransactionDefinition();
+
+		txDef.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+		txDef.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+		TransactionTemplate txTemplate = new TransactionTemplate(txManager, txDef);
+
+		String key = "aKey";
+		int timeoutSec = 30;
+		int maxLockCount = 5;
+		String inputContext = "some context";
+
+		txTemplate.executeWithoutResult((txStatus) -> {
+
+			Optional<String> firstToken = directAttemptToAcquireSemaphoreLock(jdbcTemplate, key, timeoutSec,
+					maxLockCount, inputContext);
+			assertTrue(firstToken.isPresent());
+
+			/*
+			 * At this point the first transaction has not been commited.  We must be able to
+			 * get a second token in a new transaction even though the first transaction has
+			 * not been commited yet.
+			 */
+			txTemplate.executeWithoutResult((tx) -> {
+				Optional<String> secondToken = directAttemptToAcquireSemaphoreLock(jdbcTemplate, key, timeoutSec,
+						maxLockCount, inputContext);
+				assertTrue(secondToken.isPresent());
+			});
+
+		});
+	}
+
+	/**
+	 * A direct call to attemptToAcquireSemaphoreLock without transactions
+	 * annotations.
+	 * 
+	 * @param template
+	 * @param key
+	 * @param timeoutSec
+	 * @param maxLockCount
+	 * @param inputContext
+	 * @return
+	 */
+	Optional<String> directAttemptToAcquireSemaphoreLock(JdbcTemplate template, String key, int timeoutSec,
+			int maxLockCount, String inputContext) {
+		return template.queryForObject("CALL attemptToAcquireSemaphoreLock(?, ?, ?, ?)", (ResultSet rs, int rowNum) -> {
+			return Optional.ofNullable(rs.getString("TOKEN"));
+		}, key, timeoutSec, maxLockCount, inputContext);
+	}
+
 	/**
 	 * Create n unique keys and ensure each key already exists in the database.
 	 * 
@@ -479,7 +546,8 @@ public class CountingSemaphoreImplTest {
 		long sleepTimeMs;
 		String context;
 
-		public TestRunner(CountingSemaphore semaphore, String key, long lockTimeoutSec, int maxLockCount, String context) {
+		public TestRunner(CountingSemaphore semaphore, String key, long lockTimeoutSec, int maxLockCount,
+				String context) {
 			super();
 			this.semaphore = semaphore;
 			this.key = key;
@@ -492,8 +560,9 @@ public class CountingSemaphoreImplTest {
 		public Boolean call() throws Exception {
 			long start = System.currentTimeMillis();
 			Optional<String> result = semaphore.attemptToAcquireLock(key, lockTimeoutSec, maxLockCount, context);
-			
-			log.info("AttemptToAcquiredLock in " + (System.currentTimeMillis() - start) + " MS with token: " + result.orElseGet(() -> null));
+
+			log.info("AttemptToAcquiredLock in " + (System.currentTimeMillis() - start) + " MS with token: "
+					+ result.orElseGet(() -> null));
 			if (result.isPresent()) {
 				try {
 					Thread.sleep(sleepTimeMs);
