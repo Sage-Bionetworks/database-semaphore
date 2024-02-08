@@ -1,3 +1,11 @@
+/**
+ * Will delete any rows where the token is null and the expires_on is null or expired.
+ * 
+ * This procedure manages it own transactions to guarantee that a slow-down from a caller
+ * cannot extend the duration of its exclusive locks.  Therefore, it must be called from
+ * a new database session (i.e. using Propagation.REQUIRES_NEW) to prevent the auto commit
+ * of any existing transaction managed by the caller.  
+ */
 CREATE PROCEDURE runGarbageCollection()
     MODIFIES SQL DATA
     SQL SECURITY INVOKER
@@ -7,8 +15,7 @@ BEGIN
 
 	the_loop: LOOP
 		/* 
-		 * Find the first row that can be deleted without blocking.
-		 * Start a transaction within the loop the minimize the length of the transaction.
+		 * Find the and lock the first row that can be deleted.
 		 */
 	   	START TRANSACTION;
     	SELECT ROW_ID INTO rowId FROM SEMAPHORE_LOCK WHERE TOKEN IS NULL AND

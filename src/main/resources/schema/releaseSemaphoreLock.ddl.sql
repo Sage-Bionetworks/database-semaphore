@@ -1,3 +1,9 @@
+/**
+ * This procedure manages it own transactions to guarantee that a slow-down from a caller
+ * cannot extend the duration of its exclusive locks.  Therefore, it must be called from
+ * a new database session (i.e. using Propagation.REQUIRES_NEW) to prevent the auto commit
+ * of any existing transaction managed by the caller.  
+ */
 CREATE PROCEDURE releaseSemaphoreLock(IN tokenIn VARCHAR(256))
     MODIFIES SQL DATA
     SQL SECURITY INVOKER
