@@ -1,5 +1,5 @@
-/**
- * Will delete any rows where the token is null and the expires_on is null or expired.
+/*
+ * Will delete any rows where the token is null and the expires_on is expired.
  * 
  * This procedure manages it own transactions to guarantee that a slow-down from a caller
  * cannot extend the duration of its exclusive locks.  Therefore, it must be called from
@@ -19,7 +19,7 @@ BEGIN
 		 */
 	   	START TRANSACTION;
     	SELECT ROW_ID INTO rowId FROM SEMAPHORE_LOCK WHERE TOKEN IS NULL AND
-			(now() > EXPIRES_ON || EXPIRES_ON IS NULL) LIMIT 1 FOR UPDATE SKIP LOCKED;
+			(now() > EXPIRES_ON) LIMIT 1 FOR UPDATE SKIP LOCKED;
 		
 		IF rowId IS NOT NULL THEN
 			DELETE FROM SEMAPHORE_LOCK WHERE ROW_ID = rowId;

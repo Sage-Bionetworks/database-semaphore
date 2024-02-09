@@ -72,7 +72,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	private static final Logger log = LogManager
 			.getLogger(CountingSemaphoreImpl.class);
 
-	private static final String SQL_CLEAR_ALL_LOCKS = "UPDATE "+ TABLE_SEMAPHORE_LOCK+" SET TOKEN = NULL, EXPIRES_ON = NULL WHERE LOCK_KEY IS NOT NULL";
+	private static final String SQL_CLEAR_ALL_LOCKS = "UPDATE "+ TABLE_SEMAPHORE_LOCK+" SET TOKEN = NULL, EXPIRES_ON = CURRENT_TIMESTAMP - INTERVAL 10 SECOND WHERE LOCK_KEY IS NOT NULL";
 
 	private static final String SQL_EXISTS_UNEXPIRED_LOCK =
 			"SELECT CONTEXT FROM " + TABLE_SEMAPHORE_LOCK + " WHERE " + COL_TABLE_SEM_LOCK_LOCK_KEY + " = ?" +

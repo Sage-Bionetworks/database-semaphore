@@ -349,24 +349,29 @@ public class CountingSemaphoreImplTest {
 		// Start clean
 		semaphore.runGarbageCollection();
 		assertEquals(0, semaphore.getLockRowCount());
-		// acquire and release a lock
-		String lockKey = "newLockKey";
+		
 		long lockTimeoutSec = 2;
-		int maxLockCount = 2;
-		Optional<String> token = semaphore.attemptToAcquireLock(lockKey, lockTimeoutSec, maxLockCount, context);
-		semaphore.releaseLock(lockKey, token.get());
-		// should still have two lock rows
-		assertEquals(2, semaphore.getLockRowCount());
-		// garbage collection should not clear the rows because they are not expired.
+		int maxLockCount = 3;
+		String keyOneTokenOne = semaphore.attemptToAcquireLock("keyOne", lockTimeoutSec, maxLockCount, context).get();
+		assertEquals(3, semaphore.getLockRowCount());
+		// set all three rows to be expired and therefore eligible for garbage collection.
+		semaphore.releaseAllLocks();
+		assertEquals(3, semaphore.getLockRowCount());
+		// add three new rows
+		String keyTwoTokenOne = semaphore.attemptToAcquireLock("keyTwo", lockTimeoutSec, maxLockCount, context).get();
+		assertEquals(6, semaphore.getLockRowCount());
+		String keyTwoTokenTwo = semaphore.attemptToAcquireLock("keyTwo", lockTimeoutSec, maxLockCount, context).get();
+		// releasing a lock clears its token but it should not expire for at least 5 minutes.
+		semaphore.releaseLock("keyTwo", keyTwoTokenTwo);
+		assertEquals(6, semaphore.getLockRowCount());
+		
+		// call under test
 		semaphore.runGarbageCollection();
-		/*
-		 * While the first lock's token is null, it should not be expired, so the row
-		 * should not be removed by garbage collection. The second lock row was never
-		 * issued an expiration so it should be removed.
-		 */
-		assertEquals(1, semaphore.getLockRowCount());
-		Thread.sleep((lockTimeoutSec * 2000));
-		// garbage collection should now clear the locks
+		// Garbage collection should only remove the first three throw since their tokens are null and they are expired (due to releaseAllLocks()).
+		assertEquals(3, semaphore.getLockRowCount());
+		semaphore.releaseAllLocks();
+		
+		// call under test
 		semaphore.runGarbageCollection();
 		assertEquals(0, semaphore.getLockRowCount());
 	}
