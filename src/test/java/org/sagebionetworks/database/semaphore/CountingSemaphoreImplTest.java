@@ -352,13 +352,13 @@ public class CountingSemaphoreImplTest {
 		
 		long lockTimeoutSec = 2;
 		int maxLockCount = 3;
-		String keyOneTokenOne = semaphore.attemptToAcquireLock("keyOne", lockTimeoutSec, maxLockCount, context).get();
+		semaphore.attemptToAcquireLock("keyOne", lockTimeoutSec, maxLockCount, context);
 		assertEquals(3, semaphore.getLockRowCount());
 		// set all three rows to be expired and therefore eligible for garbage collection.
 		semaphore.releaseAllLocks();
 		assertEquals(3, semaphore.getLockRowCount());
 		// add three new rows
-		String keyTwoTokenOne = semaphore.attemptToAcquireLock("keyTwo", lockTimeoutSec, maxLockCount, context).get();
+		semaphore.attemptToAcquireLock("keyTwo", lockTimeoutSec, maxLockCount, context);
 		assertEquals(6, semaphore.getLockRowCount());
 		String keyTwoTokenTwo = semaphore.attemptToAcquireLock("keyTwo", lockTimeoutSec, maxLockCount, context).get();
 		// releasing a lock clears its token but it should not expire for at least 5 minutes.
