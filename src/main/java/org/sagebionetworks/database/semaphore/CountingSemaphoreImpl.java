@@ -53,9 +53,6 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 
 	private static final String COUNT_LOCK_ROWS = "SELECT COUNT(*) FROM SEMAPHORE_LOCK";
 
-	private static final String GARBAGE_COLLECTION = "DELETE FROM SEMAPHORE_LOCK WHERE"
-			+ " TOKEN IS NULL AND (now() > EXPIRES_ON || EXPIRES_ON IS NULL)";
-
 	private static final String CALL_REFRESH_SEMAPHORE_LOCK = "CALL refreshSemaphoreLock(?, ?)";
 
 	private static final String CALL_RELEASE_SEMAPHORE_LOCK = "CALL releaseSemaphoreLock(?)";
@@ -69,11 +66,13 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	private static final String ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK = "attemptToAcquireSemaphoreLock";
 	
 	private static final String BOOTSTRAP_LOCK = "bootstrapLockKeyRows";
+	
+	private static final String GARBAGE_COLLECTION = "runGarbageCollection";
 
 	private static final Logger log = LogManager
 			.getLogger(CountingSemaphoreImpl.class);
 
-	private static final String SQL_CLEAR_ALL_LOCKS = "UPDATE "+ TABLE_SEMAPHORE_LOCK+" SET TOKEN = NULL, EXPIRES_ON = NULL WHERE LOCK_KEY IS NOT NULL";
+	private static final String SQL_CLEAR_ALL_LOCKS = "UPDATE "+ TABLE_SEMAPHORE_LOCK+" SET TOKEN = NULL, EXPIRES_ON = CURRENT_TIMESTAMP - INTERVAL 10 SECOND WHERE LOCK_KEY IS NOT NULL";
 
 	private static final String SQL_EXISTS_UNEXPIRED_LOCK =
 			"SELECT CONTEXT FROM " + TABLE_SEMAPHORE_LOCK + " WHERE " + COL_TABLE_SEM_LOCK_LOCK_KEY + " = ?" +
@@ -112,6 +111,7 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 		createProcedureIfDoesNotExist(ATTEMPT_TO_ACQUIRE_SEMAPHORE_LOCK);
 		createProcedureIfDoesNotExist(RELEASE_SEMAPHORE_LOCK);
 		createProcedureIfDoesNotExist(REFRESH_SEMAPHORE_LOCK);
+		createProcedureIfDoesNotExist(GARBAGE_COLLECTION);
 	}
 
 	/**
@@ -211,8 +211,9 @@ public class CountingSemaphoreImpl implements CountingSemaphore {
 	}
 
 	@Override
+	@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Throwable.class, propagation = Propagation.REQUIRES_NEW)
 	public void runGarbageCollection() {
-		jdbcTemplate.update(GARBAGE_COLLECTION);
+		jdbcTemplate.update("CALL runGarbageCollection();");
 	}
 
 	@Override
